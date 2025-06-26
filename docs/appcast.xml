@@ -8,39 +8,39 @@
     <language>en</language>
 
     <!-- Updates -->
-    <item>
-      <title>Nxtscape - 0.4.0</title>
-      <description sparkle:format="plain-text">
-- [Fix] OTA updates were not working correctly for some users; fixing it.
-      </description>
-      <sparkle:version>7155.85</sparkle:version>
-      <sparkle:shortVersionString>0.4.0</sparkle:shortVersionString>
-      <pubDate>Thu, 26 Jun 2025 12:44:32 -0700</pubDate>
-      <link>https://nxtscape.ai</link>
-      <enclosure
-        url="https://storage.googleapis.com/nxtscape/nxtscape-v0.4.0-arm64.dmg"
-        sparkle:edSignature="AkqEjtwJdAriXJpGii7cUdXCh9moMWD5zVHiG5OeLfmF9xrBLowLqx7qxFC/LjbCt1Ruxqb5J1TD9JVK7gekAQ=="
-        length="126848699"
-        type="application/octet-stream" />
-      <sparkle:minimumSystemVersion>10.15</sparkle:minimumSystemVersion>
-    </item>
-    <item>
-      <title>Nxtscape - 0.3.0</title>
-      <description sparkle:format="plain-text">
-– Much improved AI agent for browser navigation tasks
-- Merged Productivity Agent and Browser Agent into a single AI agent
-      </description>
-      <sparkle:version>7155.85</sparkle:version>
-      <sparkle:shortVersionString>0.3.0</sparkle:shortVersionString>
-      <pubDate>Thu, 26 Jun 2025 07:34:24 -0700</pubDate>
-      <link>https://nxtscape.ai</link>
-      <enclosure
-        url="https://storage.googleapis.com/nxtscape/nxtscape-v0.3.0-arm64.dmg"
-        sparkle:edSignature="axUY3tBN7txWh1PMCrrtHdYiIBFQlABBbD/iHyM29m9N9FWRu99vNJjyGPLP00mfctR+XzZIBE0E8MFGcgPYCg=="
-        length="126850187"
-        type="application/octet-stream" />
-      <sparkle:minimumSystemVersion>10.15</sparkle:minimumSystemVersion>
-    </item>
+    <!-- <item> -->
+<!--       <title>Nxtscape - 0.4.0</title> -->
+<!--       <description sparkle:format="plain-text"> -->
+<!-- - [Fix] OTA updates were not working correctly for some users; fixing it. -->
+<!--       </description> -->
+<!--       <sparkle:version>7155.85</sparkle:version> -->
+<!--       <sparkle:shortVersionString>0.4.0</sparkle:shortVersionString> -->
+<!--       <pubDate>Thu, 26 Jun 2025 12:44:32 -0700</pubDate> -->
+<!--       <link>https://nxtscape.ai</link> -->
+<!--       <enclosure -->
+<!--         url="https://storage.googleapis.com/nxtscape/nxtscape-v0.4.0-arm64.dmg" -->
+<!--         sparkle:edSignature="AkqEjtwJdAriXJpGii7cUdXCh9moMWD5zVHiG5OeLfmF9xrBLowLqx7qxFC/LjbCt1Ruxqb5J1TD9JVK7gekAQ==" -->
+<!--         length="126848699" -->
+<!--         type="application/octet-stream" /> -->
+<!--       <sparkle:minimumSystemVersion>10.15</sparkle:minimumSystemVersion> -->
+<!--     </item> -->
+<!--     <item> -->
+<!--       <title>Nxtscape - 0.3.0</title> -->
+<!--       <description sparkle:format="plain-text"> -->
+<!-- – Much improved AI agent for browser navigation tasks -->
+<!-- - Merged Productivity Agent and Browser Agent into a single AI agent -->
+<!--       </description> -->
+<!--       <sparkle:version>7155.85</sparkle:version> -->
+<!--       <sparkle:shortVersionString>0.3.0</sparkle:shortVersionString> -->
+<!--       <pubDate>Thu, 26 Jun 2025 07:34:24 -0700</pubDate> -->
+<!--       <link>https://nxtscape.ai</link> -->
+<!--       <enclosure -->
+<!--         url="https://storage.googleapis.com/nxtscape/nxtscape-v0.3.0-arm64.dmg" -->
+<!--         sparkle:edSignature="axUY3tBN7txWh1PMCrrtHdYiIBFQlABBbD/iHyM29m9N9FWRu99vNJjyGPLP00mfctR+XzZIBE0E8MFGcgPYCg==" -->
+<!--         length="126850187" -->
+<!--         type="application/octet-stream" /> -->
+<!--       <sparkle:minimumSystemVersion>10.15</sparkle:minimumSystemVersion> -->
+<!--     </item> -->
     <item>
       <title>Nxtscape - 0.2.0</title>
       <description sparkle:format="plain-text">
