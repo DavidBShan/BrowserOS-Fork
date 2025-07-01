@@ -19,6 +19,7 @@ from modules.git import setup_git, setup_sparkle
 from modules.patches import apply_patches
 from modules.resources import copy_resources
 from modules.chromium_replace import replace_chromium_files, add_file_to_replacements
+from modules.string_replaces import apply_string_replacements
 from modules.configure import configure
 from modules.compile import build
 from modules.sign import sign, sign_universal
@@ -367,6 +368,12 @@ def build_main(
     type=click.Path(exists=True, path_type=Path),
     help="Add a file to chromium_src replacement directory: --add-replace /path/to/chromium/src/file --chromium-src /path/to/chromium/src",
 )
+@click.option(
+    "--string-replace",
+    is_flag=True,
+    default=False,
+    help="Apply string replacements to chromium files",
+)
 def main(
     config,
     clean,
@@ -382,11 +389,12 @@ def main(
     slack_notifications,
     merge,
     add_replace,
+    string_replace,
 ):
     """Simple build system for Nxtscape Browser"""
 
     # Validate chromium-src for commands that need it
-    if add_replace or merge or (not config and chromium_src is None):
+    if add_replace or merge or string_replace or (not config and chromium_src is None):
         if not chromium_src:
             if add_replace:
                 log_error("--add-replace requires --chromium-src to be specified")
@@ -398,6 +406,11 @@ def main(
                 log_error(
                     "Example: python build.py --merge app1.app app2.app --chromium-src /path/to/chromium/src"
                 )
+            elif string_replace:
+                log_error("--string-replace requires --chromium-src to be specified")
+                log_error(
+                    "Example: python build.py --string-replace --chromium-src /path/to/chromium/src"
+                )
             else:
                 log_error("--chromium-src is required when not using a config file")
                 log_error("Example: python build.py --chromium-src /path/to/chromium/src")
@@ -408,6 +421,26 @@ def main(
             log_error(f"Chromium source directory does not exist: {chromium_src}")
             sys.exit(1)
 
+    # Handle string-replace command
+    if string_replace:
+        # Get root directory
+        root_dir = Path(__file__).parent.parent
+        
+        # Create a minimal context for string replacements
+        from context import BuildContext
+        ctx = BuildContext(
+            root_dir=root_dir,
+            chromium_src=chromium_src,
+            architecture="arm64",  # Not used for string replacements
+            build_type="debug",    # Not used for string replacements
+        )
+        
+        # Apply string replacements
+        if apply_string_replacements(ctx):
+            sys.exit(0)
+        else:
+            sys.exit(1)
+    
     # Handle add-replace command
     if add_replace:
         # Get root directory
