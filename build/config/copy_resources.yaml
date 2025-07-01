@@ -14,19 +14,6 @@ copy_operations:
     destination: "chrome/browser/resources/ai_side_panel"
     type: "directory"
 
-  # Branding - Build Type Conditional
-  - name: "Development Branding"
-    source: "resources/branding/BRANDING.dev"
-    destination: "chrome/app/theme/chromium/BRANDING"
-    type: "file"
-    build_type: "debug"
-
-  - name: "Release Branding"
-    source: "resources/branding/BRANDING.release"
-    destination: "chrome/app/theme/chromium/BRANDING"
-    type: "file"
-    build_type: "release"
-
   # Icons - General
   - name: "Product Logo Icons"
     source: "resources/icons/*.png"
@@ -63,4 +50,3 @@ copy_operations:
     source: "resources/icons/win"
     destination: "chrome/app/theme/chromium/win"
     type: "directory"
-
