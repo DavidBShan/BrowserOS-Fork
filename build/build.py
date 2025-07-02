@@ -46,6 +46,7 @@ def build_main(
     build_type: str = "debug",
     chromium_src_dir: Optional[Path] = None,
     slack_notifications: bool = False,
+    patch_interactive: bool = False,
 ):
     """Main build orchestration"""
     log_info("🚀 Nxtscape Build System")
@@ -187,7 +188,7 @@ def build_main(
                 setup_sparkle(ctx)
 
                 # Apply patches
-                apply_patches(ctx)
+                apply_patches(ctx, interactive=patch_interactive)
 
                 # Copy resources
                 copy_resources(ctx)
@@ -375,6 +376,13 @@ def build_main(
     default=False,
     help="Apply string replacements to chromium files",
 )
+@click.option(
+    "--patch-interactive",
+    "-i",
+    is_flag=True,
+    default=False,
+    help="Ask for confirmation before applying each patch",
+)
 def main(
     config,
     clean,
@@ -390,6 +398,7 @@ def main(
     merge,
     add_replace,
     string_replace,
+    patch_interactive,
 ):
     """Simple build system for Nxtscape Browser"""
 
@@ -479,6 +488,7 @@ def main(
         build_type=build_type,
         chromium_src_dir=chromium_src,
         slack_notifications=slack_notifications,
+        patch_interactive=patch_interactive,
     )
 
 

@@ -12,7 +12,7 @@ from context import BuildContext
 from utils import log_info, log_error, log_success, log_warning
 
 
-def apply_patches(ctx: BuildContext) -> bool:
+def apply_patches(ctx: BuildContext, interactive: bool = False) -> bool:
     """Apply Nxtscape patches"""
     if not ctx.apply_patches:
         log_info("\n⏭️  Skipping patches")
@@ -40,13 +40,37 @@ def apply_patches(ctx: BuildContext) -> bool:
     
     log_info(f"Found {len(patches)} patches to apply")
     
+    if interactive:
+        log_info("🔍 Interactive mode enabled - will ask for confirmation before each patch")
+    
     # Apply each patch
     for i, patch_path in enumerate(patches, 1):
         if not patch_path.exists():
             log_info(f"⚠️  Patch file not found: {patch_path}")
             continue
+        
+        if interactive:
+            # Show patch info and ask for confirmation
+            log_info(f"\n{'='*60}")
+            log_info(f"Patch {i}/{len(patches)}: {patch_path.name}")
+            log_info(f"{'='*60}")
             
-        apply_single_patch(patch_path, ctx.chromium_src, patch_bin, i, len(patches))
+            while True:
+                choice = input("\nOptions:\n  1) Apply this patch\n  2) Skip this patch\n  3) Stop patching here\nEnter your choice (1-3): ").strip()
+                
+                if choice == "1":
+                    apply_single_patch(patch_path, ctx.chromium_src, patch_bin, i, len(patches))
+                    break
+                elif choice == "2":
+                    log_warning(f"⏭️  Skipping patch {patch_path.name}")
+                    break
+                elif choice == "3":
+                    log_info("Stopping patch process as requested")
+                    return True
+                else:
+                    log_error("Invalid choice. Please enter 1, 2, or 3.")
+        else:
+            apply_single_patch(patch_path, ctx.chromium_src, patch_bin, i, len(patches))
     
     log_success("Patches applied")
     return True
