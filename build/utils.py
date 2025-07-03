@@ -8,9 +8,14 @@ import sys
 import subprocess
 import yaml
 from pathlib import Path
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Union
 from datetime import datetime
 
+
+# Platform detection
+IS_WINDOWS = sys.platform == "win32"
+IS_MACOS = sys.platform == "darwin"
+IS_LINUX = sys.platform.startswith("linux")
 
 # Global log file handle
 _log_file = None
@@ -51,10 +56,7 @@ def _sanitize_for_windows(message: str) -> str:
 
 def log_info(message: str):
     """Print info message"""
-    if sys.platform == "win32":
-        print(_sanitize_for_windows(message))
-    else:
-        print(f"[INFO] {message}")
+    print(_sanitize_for_windows(message))
     _log_to_file(f"INFO: {message}")
 
 def log_warning(message: str):
@@ -173,4 +175,62 @@ def load_config(config_path: Path) -> Dict:
         config = yaml.safe_load(f)
 
     return config
+
+
+# Platform-specific utilities
+def get_platform() -> str:
+    """Get platform name in a consistent format"""
+    if IS_WINDOWS:
+        return "windows"
+    elif IS_MACOS:
+        return "macos"
+    elif IS_LINUX:
+        return "linux"
+    return "unknown"
+
+
+def get_platform_arch() -> str:
+    """Get default architecture for current platform"""
+    if IS_WINDOWS:
+        return "x64"
+    elif IS_MACOS:
+        # macOS can be arm64 or x64
+        import platform
+        return "arm64" if platform.machine() == "arm64" else "x64"
+    return "x64"
+
+
+def get_executable_extension() -> str:
+    """Get executable file extension for current platform"""
+    return ".exe" if IS_WINDOWS else ""
+
+
+def get_app_extension() -> str:
+    """Get application bundle extension for current platform"""
+    if IS_MACOS:
+        return ".app"
+    elif IS_WINDOWS:
+        return ".exe"
+    return ""
+
+
+def normalize_path(path: Union[str, Path]) -> Path:
+    """Normalize path for current platform"""
+    path = Path(path)
+    if IS_WINDOWS:
+        # Convert forward slashes to backslashes on Windows
+        return Path(str(path).replace('/', '\\'))
+    return path
+
+
+def join_paths(*paths: Union[str, Path]) -> Path:
+    """Join paths in a platform-aware way"""
+    if not paths:
+        return Path()
+    
+    result = Path(paths[0])
+    for p in paths[1:]:
+        result = result / p
+    
+    return normalize_path(result)
 

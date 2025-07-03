@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 from typing import Optional
 from context import BuildContext
-from utils import run_command, log_info, log_error, log_success
+from utils import run_command, log_info, log_error, log_success, join_paths
 
 
 def configure(ctx: BuildContext, gn_flags_file: Optional[Path] = None) -> bool:
@@ -16,14 +16,14 @@ def configure(ctx: BuildContext, gn_flags_file: Optional[Path] = None) -> bool:
     log_info(f"\n⚙️  Configuring {ctx.build_type} build for {ctx.architecture}...")
     
     # Create output directory
-    out_path = ctx.chromium_src / ctx.out_dir
+    out_path = join_paths(ctx.chromium_src, ctx.out_dir)
     out_path.mkdir(parents=True, exist_ok=True)
     
     # Copy build flags
     if gn_flags_file is None:
         flags_file = ctx.get_gn_flags_file()
     else:
-        flags_file = ctx.root_dir / gn_flags_file
+        flags_file = join_paths(ctx.root_dir, gn_flags_file)
         
     if not flags_file.exists():
         log_error(f"GN flags file not found: {flags_file}")

@@ -8,7 +8,7 @@ import tempfile
 import shutil
 from pathlib import Path
 from context import BuildContext
-from utils import run_command, log_info, log_success, log_warning
+from utils import run_command, log_info, log_success, log_warning, join_paths
 
 
 def build(ctx: BuildContext) -> bool:
@@ -28,7 +28,7 @@ def build(ctx: BuildContext) -> bool:
                 temp_path = temp_file.name
             
             # Copy VERSION file to chrome/VERSION
-            chrome_version_path = ctx.chromium_src / "chrome" / "VERSION"
+            chrome_version_path = join_paths(ctx.chromium_src, "chrome", "VERSION")
             shutil.copy2(temp_path, chrome_version_path)
             
             # Clean up temp file

@@ -7,9 +7,11 @@ import os
 import sys
 import subprocess
 import shutil
+import tarfile
+import urllib.request
 from pathlib import Path
 from context import BuildContext
-from utils import run_command, log_info, log_error, log_success
+from utils import run_command, log_info, log_error, log_success, IS_WINDOWS
 
 
 def setup_git(ctx: BuildContext) -> bool:
@@ -61,11 +63,19 @@ def setup_sparkle(ctx: BuildContext) -> bool:
     
     # Download Sparkle
     sparkle_url = ctx.get_sparkle_url()
+    sparkle_archive = sparkle_dir / "sparkle.tar.xz"
     
-    os.chdir(sparkle_dir)
-    run_command(["curl", "-L", "-o", "sparkle.tar.xz", sparkle_url])
-    run_command(["tar", "-xf", "sparkle.tar.xz"])
-    os.remove("sparkle.tar.xz")
+    # Download using urllib (cross-platform)
+    log_info(f"Downloading Sparkle from {sparkle_url}...")
+    urllib.request.urlretrieve(sparkle_url, sparkle_archive)
+    
+    # Extract using tarfile module (cross-platform)
+    log_info("Extracting Sparkle...")
+    with tarfile.open(sparkle_archive, 'r:xz') as tar:
+        tar.extractall(sparkle_dir)
+    
+    # Clean up
+    sparkle_archive.unlink()
     
     log_success("Sparkle setup complete")
     return True

@@ -11,7 +11,7 @@ from typing import Optional
 
 # Import shared components
 from context import BuildContext
-from utils import load_config, log_info, log_warning, log_error, log_success
+from utils import load_config, log_info, log_warning, log_error, log_success, IS_WINDOWS, IS_MACOS
 
 # Import modules
 from modules.clean import clean
@@ -22,9 +22,30 @@ from modules.chromium_replace import replace_chromium_files, add_file_to_replace
 from modules.string_replaces import apply_string_replacements
 from modules.configure import configure
 from modules.compile import build
-from modules.sign import sign, sign_universal
-from modules.package import package, package_universal
-from modules.postbuild import run_postbuild
+
+# Platform-specific imports
+if IS_MACOS:
+    from modules.sign import sign, sign_universal
+    from modules.package import package, package_universal
+    from modules.postbuild import run_postbuild
+else:
+    # Stub functions for non-macOS platforms
+    def sign(ctx): 
+        log_warning("Signing is not implemented for this platform")
+        return True
+    def sign_universal(contexts): 
+        log_warning("Universal signing is not implemented for this platform")
+        return True
+    def package(ctx): 
+        log_warning("Packaging is not implemented for this platform")
+        return True
+    def package_universal(contexts): 
+        log_warning("Universal packaging is not implemented for this platform")
+        return True
+    def run_postbuild(ctx):
+        log_warning("Post-build tasks are not implemented for this platform")
+        return True
+
 from modules.slack import (
     notify_build_started,
     notify_build_step,
@@ -42,7 +63,7 @@ def build_main(
     sign_flag: bool = False,
     package_flag: bool = False,
     build_flag: bool = False,
-    arch: str = "arm64",
+    arch: str = "",  # Will use platform default if not specified
     build_type: str = "debug",
     chromium_src_dir: Optional[Path] = None,
     slack_notifications: bool = False,
@@ -61,7 +82,7 @@ def build_main(
     # Load config if provided
     config = None
     gn_flags_file = None
-    architectures = [arch]  # Default to single architecture
+    architectures = [arch] if arch else []  # Empty list if no arch specified
     universal = False
     if config_file:
         config = load_config(config_file)
@@ -125,6 +146,12 @@ def build_main(
         log_error("Please provide a valid chromium source path")
         raise FileNotFoundError(f"Chromium source directory not found: {chromium_src}")
 
+    # If no architectures specified, use platform default
+    if not architectures:
+        from utils import get_platform_arch
+        architectures = [get_platform_arch()]
+        log_info(f"📍 Using platform default architecture: {architectures[0]}")
+
     # Display build configuration
     log_info(f"📍 Root: {root_dir}")
     log_info(f"📍 Chromium source: {chromium_src}")
@@ -184,8 +211,11 @@ def build_main(
                 # Then apply string replacements
                 apply_string_replacements(ctx)
 
-                # Setup sparkle
-                setup_sparkle(ctx)
+                # Setup sparkle (macOS only)
+                if IS_MACOS:
+                    setup_sparkle(ctx)
+                else:
+                    log_info("Skipping Sparkle setup (macOS only)")
 
                 # Apply patches
                 apply_patches(ctx, interactive=patch_interactive)
@@ -333,8 +363,8 @@ def build_main(
     "--arch",
     "-a",
     type=click.Choice(["arm64", "x64"]),
-    default="arm64",
-    help="Architecture",
+    default=None,
+    help="Architecture (defaults to platform-specific)",
 )
 @click.option(
     "--build-type",
@@ -443,7 +473,7 @@ def main(
         ctx = BuildContext(
             root_dir=root_dir,
             chromium_src=chromium_src,
-            architecture="arm64",  # Not used for string replacements
+            architecture="",  # Use platform default
             build_type="debug",  # Not used for string replacements
         )
 
@@ -484,7 +514,7 @@ def main(
         sign_flag=sign,
         package_flag=package,
         build_flag=build,
-        arch=arch,
+        arch=arch or "",  # Pass empty string to use platform default
         build_type=build_type,
         chromium_src_dir=chromium_src,
         slack_notifications=slack_notifications,

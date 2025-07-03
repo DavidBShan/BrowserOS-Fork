@@ -1,0 +1,36 @@
+# Windows Debug Build Configuration
+is_debug = true
+is_component_build = true
+symbol_level = 2
+remove_webcore_debug_symbols = false
+
+# Windows-specific flags
+target_cpu = "x64"
+enable_nacl = false
+
+# Use system-installed Visual Studio and Windows SDK
+use_custom_libcxx = false
+
+# Chrome branding
+is_chrome_branded = false
+chrome_pgo_phase = 0
+
+# Features
+enable_extensions = true
+enable_plugins = true
+enable_pdf = true
+enable_print_preview = true
+enable_spellcheck = true
+enable_webrtc = true
+
+# Disable features not needed for debug builds
+is_official_build = false
+dcheck_always_on = true
+
+# Windows-specific optimizations
+use_lld = true
+use_thin_lto = false
+
+# Signing
+proprietary_codecs = true
+ffmpeg_branding = "Chrome"

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 DMG creation and packaging module for BrowserOS
+NOTE: This module is macOS-specific. Windows packaging would require different tools (MSI/NSIS)
 """
 
 import sys

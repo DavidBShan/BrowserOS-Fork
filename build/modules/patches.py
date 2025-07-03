@@ -9,7 +9,7 @@ import subprocess
 from pathlib import Path
 from typing import Iterator, List
 from context import BuildContext
-from utils import log_info, log_error, log_success, log_warning
+from utils import log_info, log_error, log_success, log_warning, IS_WINDOWS
 
 
 def apply_patches(ctx: BuildContext, interactive: bool = False) -> bool:
@@ -20,8 +20,11 @@ def apply_patches(ctx: BuildContext, interactive: bool = False) -> bool:
     
     log_info("\n🩹 Applying patches...")
     
-    # Find patch binary
-    patch_bin = find_patch_binary()
+    # Check if git is available
+    if not shutil.which('git'):
+        log_error("Git is not available in PATH")
+        log_error("Please install Git to apply patches")
+        raise RuntimeError("Git not found in PATH")
     
     # Get list of patches
     root_patches_dir = ctx.get_patches_dir()
@@ -59,7 +62,7 @@ def apply_patches(ctx: BuildContext, interactive: bool = False) -> bool:
                 choice = input("\nOptions:\n  1) Apply this patch\n  2) Skip this patch\n  3) Stop patching here\nEnter your choice (1-3): ").strip()
                 
                 if choice == "1":
-                    apply_single_patch(patch_path, ctx.chromium_src, patch_bin, i, len(patches))
+                    apply_single_patch(patch_path, ctx.chromium_src, i, len(patches))
                     break
                 elif choice == "2":
                     log_warning(f"⏭️  Skipping patch {patch_path.name}")
@@ -70,19 +73,12 @@ def apply_patches(ctx: BuildContext, interactive: bool = False) -> bool:
                 else:
                     log_error("Invalid choice. Please enter 1, 2, or 3.")
         else:
-            apply_single_patch(patch_path, ctx.chromium_src, patch_bin, i, len(patches))
+            apply_single_patch(patch_path, ctx.chromium_src, i, len(patches))
     
     log_success("Patches applied")
     return True
 
 
-def find_patch_binary() -> Path:
-    """Find the patch binary"""
-    patch_path = shutil.which('patch')
-    if not patch_path:
-        log_error("Could not find 'patch' command in PATH")
-        raise RuntimeError("Could not find 'patch' command in PATH")
-    return Path(patch_path)
 
 
 def parse_series_file(patches_dir: Path) -> Iterator[Path]:
@@ -107,23 +103,35 @@ def parse_series_file(patches_dir: Path) -> Iterator[Path]:
     return patches
 
 
-def apply_single_patch(patch_path: Path, tree_path: Path, patch_bin: Path, 
-                      current_num: int, total: int) -> bool:
-    """Apply a single patch with error handling"""
+def apply_single_patch(patch_path: Path, tree_path: Path, current_num: int, total: int) -> bool:
+    """Apply a single patch using git apply"""
+    # Use git apply which is cross-platform and handles patch format better
     cmd = [
-        str(patch_bin), '-p1', '--ignore-whitespace', '-i',
-        str(patch_path), '-d', str(tree_path), 
-        '--no-backup-if-mismatch', '--forward'
+        'git', 'apply',
+        '--ignore-whitespace',
+        '--whitespace=nowarn',
+        '-p1',
+        str(patch_path)
     ]
     
     log_info(f"  * Applying {patch_path.name} ({current_num}/{total})")
     
-    result = subprocess.run(cmd, text=True, capture_output=True)
+    # Run from the tree_path directory
+    result = subprocess.run(cmd, text=True, capture_output=True, cwd=tree_path)
     
     if result.returncode == 0:
         return True
     
-    # Patch failed
+    # Patch failed - try with --3way for better conflict resolution
+    log_warning(f"Standard apply failed, trying 3-way merge for {patch_path.name}")
+    cmd.append('--3way')
+    result = subprocess.run(cmd[:-1] + ['--3way', str(patch_path)], text=True, capture_output=True, cwd=tree_path)
+    
+    if result.returncode == 0:
+        log_info(f"✓ Applied {patch_path.name} with 3-way merge")
+        return True
+    
+    # Patch still failed
     log_error(f"Failed to apply patch: {patch_path.name}")
     if result.stderr:
         log_error(f"Error: {result.stderr}")
@@ -144,7 +152,7 @@ def apply_single_patch(patch_path: Path, tree_path: Path, patch_bin: Path,
             log_warning(f"⏭️  Skipping patch {patch_path.name}")
             return True  # Continue with next patch
         elif choice == "2":
-            return apply_single_patch(patch_path, tree_path, patch_bin, current_num, total)
+            return apply_single_patch(patch_path, tree_path, current_num, total)
         elif choice == "3":
             log_error("Aborting patch process")
             raise RuntimeError("Patch process aborted by user")
@@ -152,4 +160,4 @@ def apply_single_patch(patch_path: Path, tree_path: Path, patch_bin: Path,
             log_info("\nPlease fix the issue manually, then press Enter to continue...")
             input("Press Enter when ready: ")
             # Retry after manual fix
-            return apply_single_patch(patch_path, tree_path, patch_bin, current_num, total)
+            return apply_single_patch(patch_path, tree_path, current_num, total)

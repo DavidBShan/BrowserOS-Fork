@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 Application signing and notarization module for BrowserOS
+NOTE: This module is macOS-specific. Windows signing would require signtool.exe
 """
 
 import os

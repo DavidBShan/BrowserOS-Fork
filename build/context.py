@@ -7,7 +7,12 @@ import time
 import sys
 from pathlib import Path
 from dataclasses import dataclass
-from utils import log_info, log_error, log_success, log_warning
+from utils import (
+    log_info, log_error, log_success, log_warning,
+    get_platform, get_platform_arch, get_executable_extension,
+    get_app_extension, normalize_path, join_paths,
+    IS_WINDOWS, IS_MACOS
+)
 
 
 @dataclass
@@ -17,7 +22,7 @@ class BuildContext:
     root_dir: Path
     chromium_src: Path = Path()
     out_dir: str = "out/Default"
-    architecture: str = "arm64"
+    architecture: str = ""  # Will be set in __post_init__
     build_type: str = "debug"
     apply_patches: bool = False
     sign_package: bool = False
@@ -28,23 +33,41 @@ class BuildContext:
     nxtscape_chromium_version: str = ""
     start_time: float = 0.0
 
-    # App names
-    CHROMIUM_APP_NAME: str = "Chromium.app"
-    NXTSCAPE_APP_NAME: str = "BrowserOS.app"
+    # App names - will be set based on platform
+    CHROMIUM_APP_NAME: str = ""
+    NXTSCAPE_APP_NAME: str = ""
 
     # Third party
     SPARKLE_VERSION: str = "2.7.0"
 
     def __post_init__(self):
-        """Load version files and set architecture-specific out_dir"""
-        # Set architecture-specific output directory
-        self.out_dir = f"out/Default_{self.architecture}"
+        """Load version files and set platform/architecture-specific configurations"""
+        # Set platform-specific defaults
+        if not self.architecture:
+            self.architecture = get_platform_arch()
+        
+        # Set platform-specific app names
+        if IS_WINDOWS:
+            self.CHROMIUM_APP_NAME = f"chrome{get_executable_extension()}"
+            self.NXTSCAPE_APP_NAME = f"BrowserOS{get_executable_extension()}"
+        elif IS_MACOS:
+            self.CHROMIUM_APP_NAME = "Chromium.app"
+            self.NXTSCAPE_APP_NAME = "BrowserOS.app"
+        else:
+            self.CHROMIUM_APP_NAME = "chrome"
+            self.NXTSCAPE_APP_NAME = "browseros"
+        
+        # Set architecture-specific output directory with platform separator
+        if IS_WINDOWS:
+            self.out_dir = f"out\\Default_{self.architecture}"
+        else:
+            self.out_dir = f"out/Default_{self.architecture}"
 
         version_dict = {}
 
         if not self.chromium_version:
             # Read from VERSION file
-            version_file = self.root_dir / "CHROMIUM_VERSION"
+            version_file = join_paths(self.root_dir, "CHROMIUM_VERSION")
             if version_file.exists():
                 # Parse VERSION file format: MAJOR=137\nMINOR=0\nBUILD=7151\nPATCH=69
                 for line in version_file.read_text().strip().split("\n"):
@@ -56,7 +79,7 @@ class BuildContext:
 
         if not self.nxtscape_version:
             # Read from NXTSCAPE_VERSION file
-            version_file = self.root_dir / "build" / "config" / "NXTSCAPE_VERSION"
+            version_file = join_paths(self.root_dir, "build", "config", "NXTSCAPE_VERSION")
             if version_file.exists():
                 self.nxtscape_version = version_file.read_text().strip()
 
@@ -71,7 +94,7 @@ class BuildContext:
             log_warning(f"📁 Using provided Chromium source: {self.chromium_src}")
         else:
             log_warning(f"⚠️  Provided path does not exist: {self.chromium_src}")
-            self.chromium_src = self.root_dir / "chromium_src"
+            self.chromium_src = join_paths(self.root_dir, "chromium_src")
             if not self.chromium_src.exists():
                 log_error(
                     f"⚠️  Default Chromium source path does not exist: {self.chromium_src}"
@@ -85,31 +108,32 @@ class BuildContext:
     # Path getter methods
     def get_config_dir(self) -> Path:
         """Get build config directory"""
-        return self.root_dir / "build" / "config"
+        return join_paths(self.root_dir, "build", "config")
 
     def get_gn_config_dir(self) -> Path:
         """Get GN config directory"""
-        return self.get_config_dir() / "gn"
+        return join_paths(self.get_config_dir(), "gn")
 
     def get_gn_flags_file(self) -> Path:
         """Get GN flags file for current build type"""
-        return self.get_gn_config_dir() / f"flags.macos.{self.build_type}.gn"
+        platform = get_platform()
+        return join_paths(self.get_gn_config_dir(), f"flags.{platform}.{self.build_type}.gn")
 
     def get_copy_resources_config(self) -> Path:
         """Get copy resources configuration file"""
-        return self.get_config_dir() / "copy_resources.yaml"
+        return join_paths(self.get_config_dir(), "copy_resources.yaml")
 
     def get_patches_dir(self) -> Path:
         """Get patches directory"""
-        return self.root_dir / "patches"
+        return join_paths(self.root_dir, "patches")
 
     def get_nxtscape_patches_dir(self) -> Path:
         """Get Nxtscape specific patches directory"""
-        return self.get_patches_dir() / "nxtscape"
+        return join_paths(self.get_patches_dir(), "nxtscape")
 
     def get_sparkle_dir(self) -> Path:
         """Get Sparkle directory"""
-        return self.chromium_src / "third_party" / "sparkle"
+        return join_paths(self.chromium_src, "third_party", "sparkle")
 
     def get_sparkle_url(self) -> str:
         """Get Sparkle download URL"""
@@ -117,55 +141,55 @@ class BuildContext:
 
     def get_resources_dir(self) -> Path:
         """Get resources directory"""
-        return self.root_dir / "resources"
+        return join_paths(self.root_dir, "resources")
 
     def get_resources_files_dir(self) -> Path:
         """Get resources files directory"""
-        return self.get_resources_dir() / "files"
+        return join_paths(self.get_resources_dir(), "files")
 
     def get_resources_gen_dir(self) -> Path:
         """Get generated resources directory"""
-        return self.get_resources_dir() / "gen"
+        return join_paths(self.get_resources_dir(), "gen")
 
     def get_chrome_resources_dir(self) -> Path:
         """Get Chrome browser resources directory"""
-        return self.chromium_src / "chrome" / "browser" / "resources"
+        return join_paths(self.chromium_src, "chrome", "browser", "resources")
 
     def get_chrome_theme_dir(self) -> Path:
         """Get Chrome theme directory"""
-        return self.chromium_src / "chrome" / "app" / "theme" / "chromium"
+        return join_paths(self.chromium_src, "chrome", "app", "theme", "chromium")
 
     def get_chrome_app_dir(self) -> Path:
         """Get Chrome app directory"""
-        return self.chromium_src / "chrome" / "app"
+        return join_paths(self.chromium_src, "chrome", "app")
 
     def get_entitlements_dir(self) -> Path:
         """Get entitlements directory"""
-        return self.root_dir / "resources" / "entitlements"
+        return join_paths(self.root_dir, "resources", "entitlements")
 
     def get_dmg_dir(self) -> Path:
-        """Get DMG output directory"""
-        return self.chromium_src / self.out_dir / "dmg"
+        """Get DMG output directory (macOS only)"""
+        return join_paths(self.chromium_src, self.out_dir, "dmg")
 
     def get_pkg_dmg_path(self) -> Path:
-        """Get pkg-dmg tool path"""
-        return self.chromium_src / "chrome" / "installer" / "mac" / "pkg-dmg"
+        """Get pkg-dmg tool path (macOS only)"""
+        return join_paths(self.chromium_src, "chrome", "installer", "mac", "pkg-dmg")
 
     def get_app_path(self) -> Path:
         """Get built app path"""
-        return self.chromium_src / self.out_dir / self.NXTSCAPE_APP_NAME
+        return join_paths(self.chromium_src, self.out_dir, self.NXTSCAPE_APP_NAME)
 
     def get_chromium_app_path(self) -> Path:
         """Get original Chromium app path"""
-        return self.chromium_src / self.out_dir / self.CHROMIUM_APP_NAME
+        return join_paths(self.chromium_src, self.out_dir, self.CHROMIUM_APP_NAME)
 
     def get_gn_args_file(self) -> Path:
         """Get GN args file path"""
-        return self.chromium_src / self.out_dir / "args.gn"
+        return join_paths(self.chromium_src, self.out_dir, "args.gn")
 
     def get_notarization_zip(self) -> Path:
-        """Get notarization zip path"""
-        return self.chromium_src / self.out_dir / "notarize.zip"
+        """Get notarization zip path (macOS only)"""
+        return join_paths(self.chromium_src, self.out_dir, "notarize.zip")
 
     def get_dmg_name(self, signed=False) -> str:
         """Get DMG filename with architecture suffix"""

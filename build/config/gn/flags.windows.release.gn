@@ -1,0 +1,39 @@
+# Windows Release Build Configuration
+is_debug = false
+is_component_build = false
+symbol_level = 0
+remove_webcore_debug_symbols = true
+
+# Windows-specific flags
+target_cpu = "x64"
+enable_nacl = false
+
+# Use system-installed Visual Studio and Windows SDK
+use_custom_libcxx = false
+
+# Chrome branding
+is_chrome_branded = false
+chrome_pgo_phase = 0
+
+# Features
+enable_extensions = true
+enable_plugins = true
+enable_pdf = true
+enable_print_preview = true
+enable_spellcheck = true
+enable_webrtc = true
+
+# Release optimizations
+is_official_build = true
+dcheck_always_on = false
+enable_stripping = true
+exclude_unwind_tables = true
+
+# Windows-specific optimizations
+use_lld = true
+use_thin_lto = true
+thin_lto_enable_optimizations = true
+
+# Signing
+proprietary_codecs = true
+ffmpeg_branding = "Chrome"
