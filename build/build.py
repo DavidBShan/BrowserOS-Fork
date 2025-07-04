@@ -11,7 +11,7 @@ from typing import Optional
 
 # Import shared components
 from context import BuildContext
-from utils import load_config, log_info, log_warning, log_error, log_success, IS_WINDOWS, IS_MACOS
+from utils import load_config, log_info, log_warning, log_error, log_success, IS_MACOS
 
 # Import modules
 from modules.clean import clean
@@ -30,21 +30,20 @@ if IS_MACOS:
     from modules.postbuild import run_postbuild
 else:
     # Stub functions for non-macOS platforms
-    def sign(ctx): 
+    def sign(ctx: BuildContext) -> bool:
         log_warning("Signing is not implemented for this platform")
         return True
-    def sign_universal(contexts): 
+    def sign_universal(contexts: list[BuildContext]) -> bool:
         log_warning("Universal signing is not implemented for this platform")
         return True
-    def package(ctx): 
+    def package(ctx: BuildContext) -> bool:
         log_warning("Packaging is not implemented for this platform")
         return True
-    def package_universal(contexts): 
+    def package_universal(contexts: list[BuildContext]) -> bool:
         log_warning("Universal packaging is not implemented for this platform")
         return True
-    def run_postbuild(ctx):
+    def run_postbuild(ctx: BuildContext) -> None:
         log_warning("Post-build tasks are not implemented for this platform")
-        return True
 
 from modules.slack import (
     notify_build_started,
@@ -523,4 +522,4 @@ def main(
 
 
 if __name__ == "__main__":
-    main()
+    main.main(standalone_mode=False)
