@@ -12,7 +12,7 @@
 <a href="https://bit.ly/nxtscape">
   <img src="https://img.shields.io/badge/Download-macOS-black?style=flat&logo=apple&logoColor=white" alt="Download for macOS (beta)" />
 </a>
-<a href="http://cdn.browseros.com/win/BrowserOS-installer.zip">
+<a href="https://cdn.browseros.com/win/BrowserOS-installer.zip">
   <img src="https://img.shields.io/badge/Download-Windows-0078D4?style=flat&logo=windows&logoColor=white" alt="Download for Windows (beta)" />
 </a>
 <br />
