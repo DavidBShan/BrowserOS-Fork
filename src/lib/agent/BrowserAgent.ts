@@ -67,7 +67,6 @@ import { EventProcessor } from '@/lib/events/EventProcessor';
 import { PLANNING_CONFIG } from '@/lib/tools/planning/PlannerTool.config';
 import { Abortable, AbortError } from '@/lib/utils/Abortable';
 import { formatToolOutput } from '@/lib/tools/formatToolOutput';
-import { formatTodoList } from '@/lib/tools/utils/formatTodoList';
 import { GlowAnimationService } from '@/lib/services/GlowAnimationService';
 
 // Type Definitions
@@ -314,77 +313,59 @@ export class BrowserAgent {
   // ===================================================================
   @Abortable
   private async _executeMultiStepStrategy(task: string): Promise<void> {
-    this.eventEmitter.debug('Executing as a complex multi-step task. Max steps: ' + BrowserAgent.MAX_STEPS_OUTER_LOOP);
+    this.eventEmitter.debug('Executing as a complex multi-step task');
     let outer_loop_index = 0;
-    const todoStore = this.executionContext.todoStore;
 
     while (outer_loop_index < BrowserAgent.MAX_STEPS_OUTER_LOOP) {
-      this.checkIfAborted();  // Check if the user has cancelled the task before executing
+      this.checkIfAborted();
 
-      // Inject current TODO state
-      const todoXml = await this._fetchTodoXml();
-      if (todoXml !== '<todos></todos>') {  // Only add if there are TODOs
-        this.messageManager.addAI(`Current TODO list:\n${todoXml}`);
-        // Show remaining TODOs to user at start of planning cycle
-        this.eventEmitter.info(formatTodoList(todoStore.getJson()));
-      }
-
-      // 1. PLAN: Create a new plan for the next few steps
+      // 1. PLAN: Create a new plan
       const plan = await this._createMultiStepPlan(task);
       if (plan.steps.length === 0) {
         throw new Error('Planning failed. Could not generate next steps.');
       }
 
-      // Convert plan steps to TODOs (simple append)
+      // 2. Convert plan to TODOs
       await this._updateTodosFromPlan(plan);
 
-      // Show TODO list after plan creation
-      this.eventEmitter.info(formatTodoList(todoStore.getJson()));
+      // 3. EXECUTE: Give full control to model
+      const instruction = `Execute the TODOs to complete the task: "${task}".
 
-      // 2. EXECUTE: Execute TODOs
-      let inner_loop_index = 0;
-      while (inner_loop_index < BrowserAgent.MAX_STEPS_INNER_LOOP && !todoStore.isAllDoneOrSkipped()) {
-        this.checkIfAborted();
-        
-        const todo = todoStore.getNextTodo();
-        if (!todo) break;
-        
-        inner_loop_index++;
-        outer_loop_index++; 
+Your workflow:
+1. Call get_next_todo to fetch each TODO
+2. Execute the TODO using appropriate tools
+3. Mark complete with todo_manager action 'complete'
+4. Continue until get_next_todo returns null
+5. Call done_tool when the overall task is complete
 
-        this.eventEmitter.info(`Executing - ${todo.content}...`);
-        
-        const instruction = `Current TODO: "${todo.content}". Complete this TODO. Before marking it as complete, you MUST:
-1. Call refresh_browser_state to get the current page state
-2. Verify that the TODO is actually achieved based on the current state
-3. If TODO is done, mark it as complete using todo_manager with action 'complete'
-4. If you discover that a previous TODO was not actually completed, use todo_manager with action 'go_back' to mark that TODO and all subsequent ones as not done
-5. If this TODO is not yet done, continue executing on it`;
-        const isTaskCompleted = await this._executeSingleTurn(instruction);
-        
-        if (isTaskCompleted) {
-          return;  // SUCCESS - task result will be generated in execute()
-        }
+You have full autonomy to:
+- Skip irrelevant TODOs
+- Go back if previous TODOs weren't completed
+- Handle errors and retry as needed
+
+Remember: Each TODO might require multiple tool calls to complete.`;
+
+      const isTaskCompleted = await this._executeSingleTurn(instruction);
+      if (isTaskCompleted) {
+        return; // Task completed successfully
       }
-      
-      // 3. VALIDATE: Check if task is complete after plan segment
+
+      // 4. VALIDATE: Check if we should continue or re-plan
       const validationResult = await this._validateTaskCompletion(task);
       if (validationResult.isComplete) {
-        // Task is complete - result will be generated in execute()
         return;
       }
-      
-      // 4. CONTINUE: Add validation result to message manager for planner
+
+      // Add validation feedback for next planning cycle
       if (validationResult.suggestions.length > 0) {
         const validationMessage = `Validation result: ${validationResult.reasoning}\nSuggestions: ${validationResult.suggestions.join(', ')}`;
         this.messageManager.addAI(validationMessage);
-        
-        // Emit validation result to debug events
-        this.eventEmitter.debug(`Validation result: ${JSON.stringify(validationResult, null, 2)}`);
       }
-      
+
+      outer_loop_index++;
     }
-    throw new Error(`Task did not complete within the maximum of ${BrowserAgent.MAX_STEPS_OUTER_LOOP} steps.`);
+
+    throw new Error(`Task did not complete within ${BrowserAgent.MAX_STEPS_OUTER_LOOP} planning cycles.`);
   }
 
   // ===================================================================
@@ -514,8 +495,6 @@ export class BrowserAgent {
         this.messageManager.addSystemReminder(
           `TODO list updated. Current state:\n${todoStore.getXml()}`
         );
-        // Show updated TODO list to user
-        this.eventEmitter.info(formatTodoList(todoStore.getJson()));
       }
 
 
@@ -622,23 +601,6 @@ export class BrowserAgent {
     }
   }
 
-  /**
-   * Fetch current TODO list as XML
-   */
-  private async _fetchTodoXml(): Promise<string> {
-    const todoTool = this.toolManager.get('todo_manager');
-    if (!todoTool) {
-      return '<todos></todos>';
-    }
-    
-    try {
-      const result = await todoTool.func({ action: 'list' });
-      const parsedResult = JSON.parse(result);
-      return parsedResult.ok ? parsedResult.output : '<todos></todos>';
-    } catch (error) {
-      return '<todos></todos>';
-    }
-  }
 
   /**
    * Update TODOs from plan steps (simple append)

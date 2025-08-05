@@ -5,7 +5,7 @@ import { toolSuccess, toolError } from '@/lib/tools/Tool.interface'
 
 // Input schema for TODO operations
 const TodoInputSchema = z.object({
-  action: z.enum(['list', 'add_multiple', 'complete', 'skip', 'go_back', 'replace_all']),  // Action to perform
+  action: z.enum(['list', 'add_multiple', 'complete', 'skip', 'go_back', 'replace_all', 'get_next']),  // Action to perform
   todos: z.array(z.object({ content: z.string() })).optional(),  // For add/replace actions
   ids: z.array(z.number().int()).optional()  // For complete/skip/go_back actions
 })
@@ -18,7 +18,7 @@ type TodoInput = z.infer<typeof TodoInputSchema>
 export function createTodoManagerTool(executionContext: ExecutionContext): DynamicStructuredTool {
   return new DynamicStructuredTool({
     name: 'todo_manager',
-    description: 'Manage TODO list for complex tasks. Actions: list (returns current TODOs as XML), add_multiple (add new TODOs), complete (mark a single TODO as done - pass array with single ID), skip (skip a single TODO by removing it - pass array with single ID), go_back (mark a TODO and all subsequent ones as not done - pass array with single ID), replace_all (clear and add new TODOs).',
+    description: 'Manage TODO list for complex tasks. Actions: list (returns current TODOs as XML), get_next (get next TODO to work on), add_multiple (add new TODOs), complete (mark a single TODO as done - pass array with single ID), skip (skip a single TODO by removing it - pass array with single ID), go_back (mark a TODO and all subsequent ones as not done - pass array with single ID), replace_all (clear and add new TODOs).',
     schema: TodoInputSchema,
     func: async (args: TodoInput): Promise<string> => {
       const todoStore = executionContext.todoStore
@@ -79,6 +79,24 @@ export function createTodoManagerTool(executionContext: ExecutionContext): Dynam
             todoStore.replaceAll(args.todos.map(t => t.content))
             resultMessage = `Replaced all TODOs with ${args.todos.length} new items`
             break
+          
+          case 'get_next':
+            const nextTodo = todoStore.getNextTodo()
+            if (!nextTodo) {
+              return JSON.stringify({
+                ok: true,
+                output: null,
+                message: 'No more TODOs to execute'
+              })
+            }
+            return JSON.stringify({
+              ok: true,
+              output: {
+                id: nextTodo.id,
+                content: nextTodo.content,
+                status: nextTodo.status
+              }
+            })
         }
         
         return JSON.stringify({

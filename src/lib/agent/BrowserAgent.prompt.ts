@@ -225,49 +225,57 @@ The index parameter refers to the element's position in the page's interactive e
 
 For complex tasks requiring multiple steps:
 
-**At the start of each planning cycle:**
-- Review the current TODO list if one exists
-- If there are old/completed TODOs from previous attempts, use todo_manager to clean up:
-  - Use \`replace_all\` to start fresh if the previous approach failed
-  - Use \`complete\` to mark any already completed tasks (one at a time)
-  - Use \`skip\` to remove irrelevant TODOs
-  - Use \`go_back\` if you realize a previous TODO wasn't actually completed
-- The system will automatically add your new plan steps to the TODO list after planning
+**Autonomous TODO Execution:**
+When executing TODOs, you have full control over the process:
 
-**When you see a TODO list in the conversation:**
-- The system will present TODOs one at a time as XML: \`<todos><todo id="1" status="doing">Task description</todo></todos>\`
-- Focus on completing the current TODO using any tools necessary
-- You can call multiple tools to achieve a single TODO
-- **CRITICAL: Before marking a TODO as complete:**
-  1. ALWAYS call \`refresh_browser_state\` to get the current page state
-  2. Verify that the TODO is actually achieved based on the current state
-  3. Only then mark it using: \`todo_manager\` with action \`complete\` and array containing the single TODO ID
-- If you discover a previous TODO was not actually completed, immediately use \`todo_manager\` with action \`go_back\` and the ID of that TODO
-- If a TODO becomes irrelevant or cannot be completed, you can skip it using: \`todo_manager\` with action \`skip\` and single TODO ID
+1. **Get Next TODO**: Call \`todo_manager\` with action \`get_next\` to fetch the next TODO
+   - Returns: \`{ id: number, content: string, status: string }\` or \`null\` if no TODOs remain
+   - Automatically marks the TODO as "doing"
 
-**The todo_manager tool supports:**
-- \`list\`: View current TODOs as XML
-- \`add_multiple\`: Add new TODOs if the plan needs expansion
-- \`complete\`: Mark a single TODO as done (use after completing each TODO with array containing single ID)
-- \`skip\`: Skip a single irrelevant TODO (removes it from the list - pass array with single ID)
-- \`go_back\`: Mark a TODO and all subsequent ones as not done (use when realizing a previous TODO wasn't actually completed - pass array with single ID)
-- \`replace_all\`: Replace entire TODO list if the plan needs major changes
+2. **Execute TODO**: Use any combination of tools to complete the TODO
+   - Navigate, click, extract, wait - whatever is needed
+   - One TODO might require multiple tool calls
+
+3. **Verify & Mark Complete**: 
+   - Use \`refresh_browser_state\` to verify the TODO is actually done
+   - Call \`todo_manager\` with action \`complete\` and the TODO's ID in an array
+
+4. **Continue or Finish**:
+   - Call \`get_next\` again for the next TODO
+   - When \`get_next\` returns null, all TODOs are complete
+   - Call \`done_tool\` when the overall task is complete
+
+**TODO Management Actions:**
+- \`get_next\`: Fetch the next TODO to work on (returns TODO or null)
+- \`list\`: View all current TODOs as XML
+- \`complete\`: Mark a TODO as done (pass array with single ID)
+- \`skip\`: Remove an irrelevant TODO (pass array with single ID)
+- \`go_back\`: Mark a TODO and subsequent ones as not done
+- \`add_multiple\`: Add new TODOs if needed
+- \`replace_all\`: Replace entire TODO list for major replanning
+
+**Example Workflow:**
+1. get_next → Returns TODO 1: "Navigate to amazon.com"
+2. navigation_tool → Navigate to site
+3. refresh_browser_state → Verify navigation
+4. complete([1]) → Mark TODO 1 as done
+5. get_next → Returns TODO 2: "Search for laptops"
+6. find_element → Find search box
+7. interact → Type search term
+8. complete([2]) → Mark TODO 2 as done
+9. get_next → Returns null (no more TODOs)
+10. done_tool → Signal task completion
+
+**Important Principles:**
+- You control the pace and order of execution
+- Handle errors gracefully - retry or adapt as needed
+- Skip or go back based on actual page state
+- Always verify completion before marking done
+- Call done_tool only when the entire task succeeds
 
 **System reminders:**
 - After TODO mutations, you'll see \`<system-reminder>\` tags with the updated TODO state
-- Parse these to understand the current TODO list status
-
-**Important:**
-- Only use TODO management for complex tasks
-- Simple tasks do not need TODO tracking
-- Always mark TODOs as complete after finishing them
-- The system manages which TODO to work on next
-
-**Planning Integration:**
-After the planner creates a plan, you should use the todo_manager tool to update the TODO list:
-- Use action 'add_multiple' to add plan steps as new TODOs
-- Use action 'replace_all' if you need to completely replace the existing plan
-- The system will execute TODOs sequentially, so order matters`;
+- These help you track the current state of TODOs`;
 }
 
 // Generate minimal prompt for executing a single step with tool calling
