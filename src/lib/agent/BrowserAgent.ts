@@ -547,7 +547,7 @@ export class BrowserAgent {
     const validatorTool = this.toolManager.get('validator_tool');
     if (!validatorTool) {
       return {
-        isComplete: true,
+        isComplete: false,
         reasoning: 'Validation skipped - tool not available',
         suggestions: []
       };
@@ -579,7 +579,7 @@ export class BrowserAgent {
     }
     
     return {
-      isComplete: true,
+      isComplete: false,
       reasoning: 'Validation failed - continuing execution',
       suggestions: []
     };

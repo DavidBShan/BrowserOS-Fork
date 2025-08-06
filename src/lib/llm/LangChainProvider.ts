@@ -94,7 +94,7 @@ export class LangChainProvider {
     switch (config.provider) {
       case 'nxtscape':
         // Nxtscape uses Gemini 2.5 Flash
-        return { maxTokens: 1_000_000 }
+        return { maxTokens: 200_000}
         
       case 'openai':
         // Check model name for context window size
