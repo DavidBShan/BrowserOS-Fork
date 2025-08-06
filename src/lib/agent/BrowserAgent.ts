@@ -325,6 +325,7 @@ export class BrowserAgent {
       if (plan.steps.length === 0) {
         throw new Error('Planning failed. Could not generate next steps.');
       }
+      this.eventEmitter.debug('Plan created:', JSON.stringify(plan, null, 2));
 
       // 2. Convert plan to TODOs
       await this._updateTodosFromPlan(plan);
@@ -346,7 +347,7 @@ export class BrowserAgent {
         inner_loop_index++;
         
         if (isTaskCompleted) {
-          return; // done_tool was called
+          break; // done_tool was called
         }
       }
 
@@ -618,20 +619,13 @@ export class BrowserAgent {
    * Update TODOs from plan steps (replaces all existing TODOs)
    */
   private async _updateTodosFromPlan(plan: Plan): Promise<void> {
-    // Convert plan steps to TODOs
-    const todos = plan.steps.map(step => ({
-      content: step.action
-    }));
-    
-    // Always replace all TODOs with the new plan
-    // This ensures we only have at most STEPS_PER_PLAN (5) TODOs at any time
     const todoTool = this.toolManager.get('todo_manager_tool');
-    if (todoTool && todos.length > 0) {
-      const args = { action: 'replace_all' as const, todos };
-      await todoTool.func(args);
-      
-      // System reminder will be added by _processToolCalls special handling
-    }
+    if (!todoTool || plan.steps.length === 0) return;
+    
+    // Replace all TODOs with the new plan
+    const todos = plan.steps.map(step => ({ content: step.action }));
+    const args = { action: 'replace_all' as const, todos };
+    await todoTool.func(args);
   }
 
   /**
