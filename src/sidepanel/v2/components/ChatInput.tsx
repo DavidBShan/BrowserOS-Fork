@@ -9,6 +9,7 @@ import { useSidePanelPortMessaging } from '@/sidepanel/hooks'
 import { MessageType } from '@/lib/types/messaging'
 import { cn } from '@/sidepanel/lib/utils'
 import { SendIcon, LoadingPawTrail } from './ui/Icons'
+import { BrowserOSProvidersConfig, BrowserOSProvider } from '@/lib/llm/settings/browserOSTypes'
 
 
 interface ChatInputProps {
@@ -25,10 +26,38 @@ export function ChatInput({ isConnected, isProcessing }: ChatInputProps) {
   const [input, setInput] = useState('')
   const [showTabSelector, setShowTabSelector] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const [providerOk, setProviderOk] = useState<boolean>(true)
   
   const { addMessage, setProcessing, selectedTabIds, clearSelectedTabs } = useChatStore()
-  const { sendMessage } = useSidePanelPortMessaging()
+  const { sendMessage, addMessageListener, removeMessageListener, connected: portConnected } = useSidePanelPortMessaging()
   const { getContextTabs, toggleTabSelection } = useTabsStore()
+  // Provider health: only consider UI connected if current default provider is usable
+  useEffect(() => {
+    const computeOk = (cfg: BrowserOSProvidersConfig) => {
+      const def = cfg.providers.find(p => p.id === cfg.defaultProviderId)
+      setProviderOk(isProviderUsable(def || null))
+    }
+
+    const handleWorkflow = (payload: any) => {
+      // Only update when explicit providers config is present
+      if (payload && payload.data && payload.data.providersConfig) {
+        computeOk(payload.data.providersConfig as BrowserOSProvidersConfig)
+      }
+    }
+
+    addMessageListener<any>(MessageType.WORKFLOW_STATUS, handleWorkflow)
+    // Initial fetch
+    sendMessage(MessageType.GET_LLM_PROVIDERS as any, {})
+    return () => removeMessageListener<any>(MessageType.WORKFLOW_STATUS, handleWorkflow)
+  }, [addMessageListener, removeMessageListener, sendMessage])
+
+  const isProviderUsable = (provider: BrowserOSProvider | null): boolean => {
+    // If the provider exists in the list, treat it as usable regardless of field completeness
+    return !!provider
+  }
+
+  const connectionOk = isConnected || portConnected
+  const uiConnected = connectionOk && providerOk
   
   // Auto-resize textarea
   useAutoResize(textareaRef, input)
@@ -62,13 +91,12 @@ export function ChatInput({ isConnected, isProcessing }: ChatInputProps) {
   const submitTask = (query: string) => {
     if (!query.trim()) return
     
-    if (!isConnected) {
+    if (!uiConnected) {
       // Show error message in chat
-      addMessage({
-        role: 'system',
-        content: 'Cannot send message: Extension is disconnected',
-        metadata: { error: true }
-      })
+      const msg = !connectionOk
+        ? 'Cannot send message: Extension is disconnected'
+        : 'Cannot send message: Provider not configured'
+      addMessage({ role: 'system', content: msg, metadata: { error: true } })
       return
     }
     
@@ -159,19 +187,21 @@ export function ChatInput({ isConnected, isProcessing }: ChatInputProps) {
   )
   
   const getPlaceholder = () => {
-    if (!isConnected) return 'Disconnected'
+    if (!connectionOk) return 'Disconnected'
+    if (!providerOk) return 'Provider error'
     if (isProcessing) return 'Task running…'
     return 'Ask me anything...'
   }
   
   const getHintText = () => {
-    if (!isConnected) return 'Waiting for connection'
+    if (!connectionOk) return 'Waiting for connection'
+    if (!providerOk) return 'Provider not configured'
     if (isProcessing) return 'Task running… Press Esc to cancel'
     return 'Press Enter to send • @ to select tabs'
   }
 
   const getLoadingIndicator = () => {
-    if (!isConnected || isProcessing) {
+    if (!uiConnected || isProcessing) {
       return <LoadingPawTrail />
     }
     return null
@@ -251,7 +281,7 @@ export function ChatInput({ isConnected, isProcessing }: ChatInputProps) {
               value={input}
               onChange={handleInputChange}
               placeholder={getPlaceholder()}
-              disabled={!isConnected}
+              disabled={!uiConnected}
               className={cn(
                 'max-h-[200px] resize-none pr-16 text-sm w-full',
                 'bg-background/80 backdrop-blur-sm border-2 border-brand/30',
@@ -261,18 +291,18 @@ export function ChatInput({ isConnected, isProcessing }: ChatInputProps) {
                 'rounded-2xl shadow-lg',
                 'px-3 py-2',
                 'transition-all duration-300 ease-out',
-                !isConnected && 'opacity-50 cursor-not-allowed bg-muted'
+                 !uiConnected && 'opacity-50 cursor-not-allowed bg-muted'
               )}
               rows={1}
               aria-label="Chat message input"
               aria-describedby="input-hint"
-              aria-invalid={!isConnected}
-              aria-disabled={!isConnected}
+               aria-invalid={!uiConnected}
+               aria-disabled={!uiConnected}
             />
             
             <Button
               type="submit"
-              disabled={!isConnected || isProcessing || !input.trim()}
+              disabled={!uiConnected || isProcessing || !input.trim()}
               size="sm"
               className="absolute right-2 bottom-2 h-10 px-4 rounded-xl bg-gradient-to-r from-brand to-brand/80 hover:from-brand/90 hover:to-brand/70 text-white font-medium shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 focus-visible:outline-none"
               variant={'default'}

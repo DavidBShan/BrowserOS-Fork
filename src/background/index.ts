@@ -1,4 +1,7 @@
 import { MessageType, LogMessage, ExecuteQueryMessage, AgentStreamUpdateMessage, CancelTaskMessage, ResetConversationMessage, GetTabsMessage } from '@/lib/types/messaging'
+import { LLMSettingsReader } from '@/lib/llm/settings/LLMSettingsReader'
+import { langChainProvider } from '@/lib/llm/LangChainProvider'
+import { BrowserOSProvidersConfigSchema, BROWSEROS_PREFERENCE_KEYS } from '@/lib/llm/settings/browserOSTypes'
 import { PortName, PortMessage } from '@/lib/runtime/PortMessaging'
 import { Logging } from '@/lib/utils/Logging'
 import { NxtScape } from '@/lib/core/NxtScape'
@@ -300,6 +303,14 @@ function handlePortMessage(message: PortMessage, port: chrome.runtime.Port): voi
       case MessageType.GET_TABS:
         // GET_TABS message received
         handleGetTabsPort(payload as GetTabsMessage['payload'], port, id)
+        break
+
+      case MessageType.GET_LLM_PROVIDERS:
+        handleGetLlmProvidersPort(port, id)
+        break
+
+      case MessageType.SAVE_LLM_PROVIDERS:
+        handleSaveLlmProvidersPort(payload, port, id)
         break
         
       case MessageType.GET_TAB_HISTORY:
@@ -666,6 +677,84 @@ function handleGetTabsPort(
         status: 'error',
         error: `Failed to get tabs: ${errorMessage}`
       },
+      id
+    })
+  }
+}
+
+// Get LLM providers configuration
+async function handleGetLlmProvidersPort(
+  port: chrome.runtime.Port,
+  id?: string
+): Promise<void> {
+  try {
+    const config = await LLMSettingsReader.readAllProviders()
+    port.postMessage({
+      type: MessageType.WORKFLOW_STATUS,
+      payload: { status: 'success', data: { providersConfig: config } },
+      id
+    })
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    debugLog(`Error handling GET_LLM_PROVIDERS: ${errorMessage}`, 'error')
+    port.postMessage({
+      type: MessageType.WORKFLOW_STATUS,
+      payload: { status: 'error', error: `Failed to read providers: ${errorMessage}` },
+      id
+    })
+  }
+}
+
+// Save LLM providers configuration
+function handleSaveLlmProvidersPort(
+  payload: unknown,
+  port: chrome.runtime.Port,
+  id?: string
+): void {
+  try {
+    const config = BrowserOSProvidersConfigSchema.parse(payload)
+    const browserOS = (chrome as any)?.browserOS as { setPref?: (name: string, value: any, pageId?: string, cb?: (ok: boolean) => void) => void } | undefined
+    if (browserOS?.setPref) {
+      browserOS.setPref(
+        BROWSEROS_PREFERENCE_KEYS.PROVIDERS,
+        JSON.stringify(config),
+        undefined,
+        (success?: boolean) => {
+          if (success) {
+            try { langChainProvider.clearCache() } catch (_) {}
+          }
+          port.postMessage({
+            type: MessageType.WORKFLOW_STATUS,
+            payload: success ? { status: 'success' } : { status: 'error', error: 'Save failed' },
+            id
+          })
+        }
+      )
+    } else {
+      // Fallback to chrome.storage.local for dev
+      try {
+        const key = BROWSEROS_PREFERENCE_KEYS.PROVIDERS
+        chrome.storage?.local?.set({ [key]: JSON.stringify(config) }, () => {
+          try { langChainProvider.clearCache() } catch (_) {}
+          port.postMessage({
+            type: MessageType.WORKFLOW_STATUS,
+            payload: { status: 'success' },
+            id
+          })
+        })
+      } catch (_e) {
+        port.postMessage({
+          type: MessageType.WORKFLOW_STATUS,
+          payload: { status: 'error', error: 'Save failed' },
+          id
+        })
+      }
+    }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    port.postMessage({
+      type: MessageType.WORKFLOW_STATUS,
+      payload: { status: 'error', error: errorMessage },
       id
     })
   }

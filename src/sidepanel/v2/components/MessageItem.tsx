@@ -8,6 +8,7 @@ import { useChatStore } from '../stores/chatStore'
 import { DogHeadSpinner } from './ui/DogHeadSpinner'
 import { ChevronDownIcon, ChevronUpIcon } from './ui/Icons'
 import { TaskManagerDropdown } from './TaskManagerDropdown'
+import { useSettingsStore } from '@/sidepanel/v2/stores/settingsStore'
 
 interface MessageItemProps {
   message: Message
@@ -275,14 +276,17 @@ const ToolResultInline = ({ name, content, autoCollapseAfterMs }: ToolResultInli
   const timerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
-    // Reset expansion and (re)schedule collapse when content/name or delay changes
+    // Reset and (re)schedule collapse when content/name or delay changes
     if (timerRef.current) {
       clearTimeout(timerRef.current)
       timerRef.current = null
     }
-    if (typeof autoCollapseAfterMs === 'number' && autoCollapseAfterMs > 0) {
+    const isEnabled = typeof autoCollapseAfterMs === 'number' && autoCollapseAfterMs > 0
+    if (isEnabled) {
       setExpanded(true)
       timerRef.current = setTimeout(() => {
+        // Simple guard: if setting is off at fire time, do nothing
+        if (!useSettingsStore.getState().autoCollapseTools) return
         setExpanded(false)
         timerRef.current = null
       }, autoCollapseAfterMs)
@@ -321,6 +325,7 @@ const ToolResultInline = ({ name, content, autoCollapseAfterMs }: ToolResultInli
  * Memoized to prevent re-renders when message hasn't changed
  */
 export const MessageItem = memo<MessageItemProps>(function MessageItem({ message, shouldIndent = false, showLocalIndentLine = false, applyIndentMargin = true }: MessageItemProps) {
+  const { autoCollapseTools } = useSettingsStore()
   const isUser = message.role === 'user'
   const isError = message.metadata?.error || message.content.includes('## Task Failed')
   const isSystem = message.role === 'system'
@@ -617,13 +622,13 @@ export const MessageItem = memo<MessageItemProps>(function MessageItem({ message
         const cleanContent = content.replace(prefixRegex, '')
         
         // Use the same collapsible style both inside and outside the orange section
-        return (
-          <ToolResultInline
-            name={rawName}
-            content={cleanContent}
-            autoCollapseAfterMs={shouldIndent ? AUTO_COLLAPSE_DELAY_MS : undefined}
-          />
-        )
+          return (
+            <ToolResultInline
+              name={rawName}
+              content={cleanContent}
+              autoCollapseAfterMs={autoCollapseTools && shouldIndent ? AUTO_COLLAPSE_DELAY_MS : undefined}
+            />
+          )
       }
       case 'markdown':
         return (

@@ -106,12 +106,30 @@ export class LLMSettingsReader {
     // Check if API is available
     const browserOS = (chrome as any)?.browserOS as ChromeBrowserOS | undefined
     if (!browserOS?.getPref) {
-      // In development mode, use mock data
-      if (isMockLLMSettings()) {
-        Logging.log('LLMSettingsReader', 'Chrome browserOS API not available, using mock provider', 'warning')
-        return this.getMockProvider()
+      // Fallback: try chrome.storage.local
+      try {
+        const key = BROWSEROS_PREFERENCE_KEYS.PROVIDERS
+        const stored = await new Promise<any>((resolve) => {
+          chrome.storage?.local?.get(key, (result) => resolve(result))
+        })
+        const raw = stored?.[key]
+        if (!raw) {
+          if (isMockLLMSettings()) {
+            Logging.log('LLMSettingsReader', 'No stored providers found, using mock provider', 'warning')
+            return this.getMockProvider()
+          }
+          return null
+        }
+        const config = BrowserOSProvidersConfigSchema.parse(typeof raw === 'string' ? JSON.parse(raw) : raw)
+        const def = config.providers.find(p => p.id === config.defaultProviderId) || null
+        return def
+      } catch (e) {
+        if (isMockLLMSettings()) {
+          Logging.log('LLMSettingsReader', 'Storage read failed, using mock provider', 'warning')
+          return this.getMockProvider()
+        }
+        return null
       }
-      return null
     }
     
     return new Promise<BrowserOSProvider | null>((resolve) => {
@@ -132,6 +150,11 @@ export class LLMSettingsReader {
         try {
           // Parse the JSON string
           const config = BrowserOSProvidersConfigSchema.parse(JSON.parse(pref.value))
+          // Normalize isDefault flags for safety
+          config.providers = config.providers.map(p => ({
+            ...p,
+            isDefault: p.id === config.defaultProviderId
+          }))
           
           // Find and return the default provider
           const defaultProvider = config.providers.find(p => p.id === config.defaultProviderId)
@@ -158,7 +181,18 @@ export class LLMSettingsReader {
   private static async readProvidersConfig(): Promise<BrowserOSProvidersConfig | null> {
     const browserOS = (chrome as any)?.browserOS as ChromeBrowserOS | undefined
     if (!browserOS?.getPref) {
-      return null
+      // Fallback: try chrome.storage.local
+      try {
+        const key = BROWSEROS_PREFERENCE_KEYS.PROVIDERS
+        const stored = await new Promise<any>((resolve) => {
+          chrome.storage?.local?.get(key, (result) => resolve(result))
+        })
+        const raw = stored?.[key]
+        if (!raw) return null
+        return BrowserOSProvidersConfigSchema.parse(typeof raw === 'string' ? JSON.parse(raw) : raw)
+      } catch (_e) {
+        return null
+      }
     }
     
     return new Promise<BrowserOSProvidersConfig | null>((resolve) => {
@@ -170,6 +204,11 @@ export class LLMSettingsReader {
         
         try {
           const config = BrowserOSProvidersConfigSchema.parse(JSON.parse(pref.value))
+          // Normalize isDefault flags for safety
+          config.providers = config.providers.map(p => ({
+            ...p,
+            isDefault: p.id === config.defaultProviderId
+          }))
           resolve(config)
         } catch (error) {
           resolve(null)

@@ -6,7 +6,8 @@ import { z } from 'zod'
 const SettingsSchema = z.object({
   fontSize: z.number().min(13).max(21).default(14),  // Font size in pixels
   theme: z.enum(['light', 'dark', 'gray']).default('light'),  // App theme
-  autoScroll: z.boolean().default(true)  // Auto-scroll chat to bottom
+  autoScroll: z.boolean().default(true),  // Auto-scroll chat to bottom
+  autoCollapseTools: z.boolean().default(true)  // Auto-collapse tool results
 })
 
 type Settings = z.infer<typeof SettingsSchema>
@@ -16,6 +17,7 @@ interface SettingsActions {
   setFontSize: (size: number) => void
   setTheme: (theme: 'light' | 'dark' | 'gray') => void
   setAutoScroll: (enabled: boolean) => void
+  setAutoCollapseTools: (enabled: boolean) => void
   resetSettings: () => void
 }
 
@@ -23,7 +25,8 @@ interface SettingsActions {
 const initialState: Settings = {
   fontSize: 14,
   theme: 'light',
-  autoScroll: true
+  autoScroll: true,
+  autoCollapseTools: true
 }
 
 // Create the store with persistence
@@ -54,6 +57,10 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
         set({ autoScroll: enabled })
       },
       
+      setAutoCollapseTools: (enabled) => {
+        set({ autoCollapseTools: enabled })
+      },
+      
       resetSettings: () => {
         set(initialState)
         // Reset document styles
@@ -64,7 +71,7 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
     }),
     {
       name: 'nxtscape-settings',  // localStorage key
-      version: 3,
+      version: 4,
       migrate: (persisted: any, version: number) => {
         // Migrate from v1 isDarkMode -> theme
         if (version === 1 && persisted) {
@@ -81,6 +88,15 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
             fontSize: typeof persisted.fontSize === 'number' ? persisted.fontSize : 14,
             theme: persisted.theme === 'dark' || persisted.theme === 'gray' ? persisted.theme : 'light',
             autoScroll: true
+          } as Settings
+        }
+        // Migrate to v4 add autoCollapseTools default true
+        if (version === 3 && persisted) {
+          return {
+            fontSize: typeof persisted.fontSize === 'number' ? persisted.fontSize : 14,
+            theme: persisted.theme === 'dark' || persisted.theme === 'gray' ? persisted.theme : 'light',
+            autoScroll: typeof persisted.autoScroll === 'boolean' ? persisted.autoScroll : true,
+            autoCollapseTools: true
           } as Settings
         }
         return persisted as Settings

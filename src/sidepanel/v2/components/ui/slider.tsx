@@ -32,7 +32,7 @@ export function Slider({
     onChange(newValue)
   }
 
-  // Calculate progress percentage for visual feedback
+  // Calculate progress percentage for visual feedback (not rendered)
   const progress = ((value - min) / (max - min)) * 100
 
   return (
@@ -79,12 +79,6 @@ export function Slider({
           '[&::-moz-range-track]:bg-muted',
           '[&::-moz-range-track]:rounded-lg'
         )}
-      />
-      
-      {/* Progress indicator */}
-      <div 
-        className="absolute top-0 left-0 h-2 bg-brand/30 rounded-lg pointer-events-none transition-all duration-200"
-        style={{ width: `${progress}%` }}
       />
     </div>
   )

@@ -32,10 +32,9 @@ export function useSidePanelPortMessaging() {
       console.warn('[SidePanelPortMessaging] Failed to connect to background script')
     }
 
-    // Cleanup on unmount
+    // Cleanup on unmount: remove listener but keep the global connection alive
     return () => {
       messaging.removeConnectionListener(handleConnectionChange)
-      messaging.disconnect()
     }
   }, [])
 

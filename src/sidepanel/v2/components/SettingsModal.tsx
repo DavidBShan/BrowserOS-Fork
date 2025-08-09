@@ -7,6 +7,7 @@ import { XIcon, SunIcon, MoonIcon } from './ui/Icons'
 import { useSettingsStore } from '@/sidepanel/v2/stores/settingsStore'
 import { useSidePanelPortMessaging } from '@/sidepanel/hooks/useSidePanelPortMessaging'
 import { MessageType } from '@/lib/types/messaging'
+import { ProviderSettingsCard } from '@/sidepanel/v2/components/ProviderSettingsCard'
 
 const DISCORD_URL = 'https://discord.com/invite/YKwjt5vuKr'
 
@@ -20,7 +21,7 @@ const SettingsModalPropsSchema = z.object({
 type SettingsModalProps = z.infer<typeof SettingsModalPropsSchema>
 
 export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
-  const { fontSize, theme, autoScroll, setFontSize, setTheme, setAutoScroll } = useSettingsStore()
+  const { fontSize, theme, autoScroll, autoCollapseTools, setFontSize, setTheme, setAutoScroll, setAutoCollapseTools } = useSettingsStore()
   const [glowEnabled, setGlowEnabled] = useState<boolean>(true)
   const { sendMessage } = useSidePanelPortMessaging()
 
@@ -123,6 +124,9 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
         {/* Settings content */}
         <div className="space-y-6">
+          {/* AI Provider */}
+          <ProviderSettingsCard />
+
           {/* Theme selection */}
           <div className="space-y-3">
             <h3 className="text-sm font-medium text-foreground">Theme</h3>
@@ -189,6 +193,20 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
               aria-label={`${autoScroll ? 'Disable' : 'Enable'} auto-scroll`}
             >
               {autoScroll ? 'On' : 'Off'}
+            </Button>
+          </div>
+
+          {/* Auto-collapse tool results */}
+          <div className="flex items-center justify-between px-4 py-2 rounded-xl border border-border/50 bg-card">
+            <p className="text-xs text-muted-foreground">Auto-collapse tool results</p>
+            <Button
+              onClick={() => setAutoCollapseTools(!autoCollapseTools)}
+              variant="ghost"
+              size="sm"
+              className={`h-7 px-2 text-xs ${autoCollapseTools ? 'text-foreground' : 'text-muted-foreground'}`}
+              aria-label={`${autoCollapseTools ? 'Disable' : 'Enable'} auto-collapse for tool results`}
+            >
+              {autoCollapseTools ? 'On' : 'Off'}
             </Button>
           </div>
           </div>

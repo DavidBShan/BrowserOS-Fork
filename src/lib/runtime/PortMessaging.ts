@@ -208,24 +208,29 @@ export class PortMessaging {
    * @returns true if message sent successfully
    */
   public sendMessage<T>(type: MessageType, payload: T, messageId?: string): boolean {
-    if (!this.port || !this.connected) {
-      console.error('[PortMessaging] Cannot send message: Not connected');
-      return false;
-    }
+    const trySend = (): boolean => {
+      if (!this.port || !this.connected) return false;
+      try {
+        const message: PortMessage<T> = { type, payload, id: messageId };
+        this.port.postMessage(message);
+        return true;
+      } catch (_e) {
+        return false;
+      }
+    };
 
-    try {
-      const message: PortMessage<T> = {
-        type,
-        payload,
-        id: messageId
-      };
-      
-      this.port.postMessage(message);
-      return true;
-    } catch (error) {
-      console.error(`[PortMessaging] Send error: ${error instanceof Error ? error.message : String(error)}`);
-      return false;
+    // First attempt
+    if (trySend()) return true;
+
+    // If not connected and autoReconnect is on, attempt a short delayed retry
+    if (this.autoReconnect) {
+      setTimeout(() => {
+        trySend();
+      }, 150);
+    } else {
+      console.error('[PortMessaging] Cannot send message: Not connected');
     }
+    return false;
   }
 
   /**
