@@ -5,12 +5,11 @@ import { BrowserOSProvidersConfigSchema, BROWSEROS_PREFERENCE_KEYS } from '@/lib
 import { PortName, PortMessage } from '@/lib/runtime/PortMessaging'
 import { Logging } from '@/lib/utils/Logging'
 import { NxtScape } from '@/lib/core/NxtScape'
-import { EventBus, EventProcessor } from '@/lib/events'
-import { UIEventHandler } from '@/lib/events/UIEventHandler'
 // Removed deprecated IStreamingCallbacks import
 import posthog from 'posthog-js'
 import { isDevelopmentMode } from '@/config'
 import { GlowAnimationService } from '@/lib/services/GlowAnimationService'
+import { PubSub, PubSubEvent } from '@/lib/pubsub'
 
 /**
  * Background script for the ParallelManus extension
@@ -91,6 +90,31 @@ let lastProvidersConfigJson: string | null = null
 
 // Get the GlowAnimationService instance
 const glowService = GlowAnimationService.getInstance()
+
+// Get PubSub instance and set up forwarding
+const pubsub = PubSub.getInstance()
+
+// Subscribe to PubSub events and forward to sidepanel
+pubsub.subscribe((event: PubSubEvent) => {
+  // Forward to all connected sidepanels
+  for (const [name, port] of connectedPorts) {
+    if (name === PortName.SIDEPANEL_TO_BACKGROUND) {
+      try {
+        port.postMessage({
+          type: MessageType.AGENT_STREAM_UPDATE,
+          payload: {
+            step: 0,
+            action: 'PUBSUB_EVENT',
+            status: 'executing',
+            details: event
+          }
+        })
+      } catch (error) {
+        debugLog(`Failed to forward PubSub event to ${name}: ${error}`, 'warning')
+      }
+    }
+  }
+})
 
 // Initialize the extension
 function initialize(): void {
@@ -399,75 +423,6 @@ function getStatusFromAction(action: string): 'thinking' | 'executing' | 'comple
   }
 }
 
-/**
- * Create EventBus, EventProcessor and UIEventHandler for streaming
- * @returns EventBus, EventProcessor and cleanup function
- */
-function createStreamingComponents(): { eventBus: EventBus; eventProcessor: EventProcessor; cleanup: () => void } {
-  const eventBus = new EventBus();
-  const eventProcessor = new EventProcessor(eventBus);
-  
-  // Create UI event handler that converts events to messages
-  const uiHandler = new UIEventHandler(eventBus, (type: MessageType, payload: any) => {
-    broadcastStreamUpdate(payload);
-  });
-  
-  // Track high-level agent activities  
-  eventBus.onStreamEvent('system.message', (event) => {
-    const { message } = event.data as any;
-    if (message.includes('Analyzing and planning your task')) {
-      captureEvent('agent_activity', {
-        agent_type: 'classification',
-        activity: 'task_analysis'
-      });
-    } else if (message.includes('Execution Plan:')) {
-      captureEvent('agent_activity', {
-        agent_type: 'planner',
-        activity: 'plan_created'
-      });
-    } else if (message.includes('Executing productivity task')) {
-      captureEvent('agent_activity', {
-        agent_type: 'productivity',
-        activity: 'task_execution'
-      });
-    } else if (message.includes('Starting browse task')) {
-      captureEvent('agent_activity', {
-        agent_type: 'browse',
-        activity: 'browse_execution'
-      });
-    } else if (message.includes('Validating task completion')) {
-      captureEvent('agent_activity', {
-        agent_type: 'validator',
-        activity: 'validation'
-      });
-    }
-  });
-  
-  // Track tool calls
-  eventBus.onStreamEvent('tool.start', (event) => {
-    const { toolName } = event.data as any;
-    captureEvent('tool_call', {
-      tool_name: toolName
-    });
-  });
-  
-  // Track errors (but not cancellations)
-  eventBus.onStreamEvent('system.error', (event) => {
-    const { error } = event.data as any;
-    if (error && !error.includes('cancelled') && !error.includes('stopped') && !error.includes('Aborted')) {
-      debugLog(`🔄 Stream error: ${error}`, 'error');
-    }
-  });
-  
-  return {
-    eventBus,
-    eventProcessor,
-    cleanup: () => {
-      uiHandler.destroy();
-      eventBus.removeAllListeners();
-    }
-  };
-}
 
 /**
  * Handles query execution from port messages
@@ -480,8 +435,6 @@ async function handleExecuteQueryPort(
   port: chrome.runtime.Port,
   id?: string
 ): Promise<void> {
-  let cleanup: (() => void) | undefined;
-  
   try {
     // Enhanced debug logging
     debugLog(`🎯 [Background] Received query execution from ${payload.source || 'unknown'}`)
@@ -494,19 +447,15 @@ async function handleExecuteQueryPort(
     // Initialize NxtScape if not already done
     await ensureNxtScapeInitialized()
     
+    // Clear previous messages when starting new execution
+    pubsub.clearBuffer()
     
-    // Create streaming components
-    const { eventBus, eventProcessor, cleanup: cleanupFn } = createStreamingComponents()
-    cleanup = cleanupFn
-    
-    // Execute the query using NxtScape with EventBus and EventProcessor
+    // Execute the query using NxtScape
     // Starting NxtScape execution
     
     const result = await nxtScape.run({
       query: payload.query,
-      tabIds: payload.tabIds,
-      eventBus: eventBus,
-      eventProcessor: eventProcessor
+      tabIds: payload.tabIds
     })
     
     // NxtScape execution completed

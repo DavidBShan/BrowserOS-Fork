@@ -8,6 +8,7 @@ import { HumanMessage, SystemMessage } from '@langchain/core/messages';
 import { PLANNING_CONFIG } from './PlannerTool.config';
 import { MessageType } from '@/lib/runtime/MessageManager';
 import { invokeWithRetry } from '@/lib/utils/retryable';
+import { PubSub } from '@/lib/pubsub';
 
 // Input schema - simple so LLM can generate and pass it
 const PlannerInputSchema = z.object({
@@ -33,6 +34,8 @@ export function createPlannerTool(executionContext: ExecutionContext): DynamicSt
     schema: PlannerInputSchema,
     func: async (args: PlannerInput): Promise<string> => {
       try {
+        const messageId = PubSub.generateId('planner_tool')
+        executionContext.getPubSub().publishMessage(PubSub.createMessageWithId(messageId, `📝 Creating plan...`, 'assistant'))
         // Get LLM instance from execution context
         const llm = await executionContext.getLLM();
         
@@ -63,6 +66,9 @@ export function createPlannerTool(executionContext: ExecutionContext): DynamicSt
           ],
           3
         );
+        
+        // Emit status message
+        executionContext.getPubSub().publishMessage(PubSub.createMessageWithId(messageId, `📝 Created plan with ${plan.steps.length} steps`, 'assistant'))
         
         // Format and return result
         return JSON.stringify({

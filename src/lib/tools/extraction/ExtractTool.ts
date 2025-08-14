@@ -5,6 +5,7 @@ import { toolError } from '@/lib/tools/Tool.interface'
 import { HumanMessage, SystemMessage } from '@langchain/core/messages'
 import { generateExtractorSystemPrompt, generateExtractorTaskPrompt } from './ExtractTool.prompt'
 import { invokeWithRetry } from '@/lib/utils/retryable'
+import { PubSub } from '@/lib/pubsub'
 
 // Input schema for extraction
 const ExtractInputSchema = z.object({
@@ -30,6 +31,8 @@ export function createExtractTool(executionContext: ExecutionContext): DynamicSt
     schema: ExtractInputSchema,
     func: async (args: ExtractInput): Promise<string> => {
       try {
+        const messageId = PubSub.generateId('extract_tool')
+        executionContext.getPubSub().publishMessage(PubSub.createMessageWithId(messageId, `📝 Extracting information from page ${args.tab_id}`, 'assistant'))
         // Get the page for the specified tab
         const pages = await executionContext.browserContext.getPages([args.tab_id])
         if (!pages || pages.length === 0) {
@@ -57,6 +60,7 @@ export function createExtractTool(executionContext: ExecutionContext): DynamicSt
               ).join('\n')
             : 'No links found'
         }
+        executionContext.getPubSub().publishMessage(PubSub.createMessageWithId(messageId, `📝 Extracted ${args.extract_type} from page, generating summary...`, 'assistant'))
         
         // Get page metadata
         const url = await page.url()

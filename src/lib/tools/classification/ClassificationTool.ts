@@ -9,6 +9,7 @@ import {
   buildClassificationTaskPrompt
 } from '@/lib/tools/classification/classification.tool.prompt'
 import { invokeWithRetry } from '@/lib/utils/retryable'
+import { PubSub } from '@/lib/pubsub'
 
 // Constants
 const MAX_RECENT_MESSAGES = 10  // Number of recent messages to analyze
@@ -38,6 +39,7 @@ export class ClassificationTool {
     try {
       // Get LLM instance
       const llm = await this.executionContext.getLLM()
+      this.executionContext.getPubSub().publishMessage(PubSub.createMessage(`📝 Classifying task...`, 'assistant'))
       
       // Get recent message history
       const reader = new MessageManagerReadOnly(this.executionContext.messageManager)

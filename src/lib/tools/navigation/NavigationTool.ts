@@ -2,6 +2,7 @@ import { z } from "zod"
 import { DynamicStructuredTool } from "@langchain/core/tools"
 import { ExecutionContext } from "@/lib/runtime/ExecutionContext"
 import { toolSuccess, toolError, type ToolOutput } from "@/lib/tools/Tool.interface"
+import { PubSub } from "@/lib/pubsub"
 
 // Constants
 const ENABLE_WAIT = false  // Set to true to enable wait after navigation actions
@@ -55,6 +56,9 @@ export class NavigationTool {
         browserPage.title()
       ])
       
+      // Emit status message
+      this.executionContext.getPubSub().publishMessage(PubSub.createMessage(`🌐 Opened page: ${currentUrl}`, 'system'))
+      
       return toolSuccess(`Navigated to ${currentUrl} - ${title}`)
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
@@ -83,6 +87,9 @@ export class NavigationTool {
         browserPage.title()
       ])
       
+      // Emit status message
+      this.executionContext.getPubSub().publishMessage(PubSub.createMessage(`🌐 Went back to: ${currentUrl}`, 'system'))
+      
       return toolSuccess(`Went back to ${currentUrl} - ${title}`)
     } catch (error) {
       // Check if there's no history to go back to
@@ -109,6 +116,9 @@ export class NavigationTool {
         browserPage.title()
       ])
       
+      // Emit status message
+      this.executionContext.getPubSub().publishMessage(PubSub.createMessage(`🌐 Went forward to: ${currentUrl}`, 'system'))
+      
       return toolSuccess(`Went forward to ${currentUrl} - ${title}`)
     } catch (error) {
       // Check if there's no history to go forward to
@@ -134,6 +144,9 @@ export class NavigationTool {
         browserPage.url(),
         browserPage.title()
       ])
+      
+      // Emit status message
+      this.executionContext.getPubSub().publishMessage(PubSub.createMessage(`🔄 Refreshed page: ${currentUrl}`, 'system'))
       
       return toolSuccess(`Refreshed ${currentUrl} - ${title}`)
     } catch (error) {

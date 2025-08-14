@@ -48,6 +48,50 @@ export function useMessageHandler() {
 
   // Create stable callback functions
   const handleStreamUpdate = useCallback((payload: any) => {
+    // Check if this is a new PubSub event
+    if (payload?.action === 'PUBSUB_EVENT' && payload?.details?.type === 'message') {
+      const message = payload.details.payload
+      
+      // Handle PubSub message
+      if (message.role === 'system') {
+        addMessage({
+          role: 'system',
+          content: message.content,
+          metadata: { 
+            kind: 'system' as const,
+            timestamp: message.ts
+          }
+        })
+      } else if (message.role === 'assistant') {
+        // Check if we need to update existing assistant message or create new one
+        const currentMessages = useChatStore.getState().messages
+        const lastAssistantMsg = [...currentMessages].reverse().find(m => m.role === 'assistant' && m.metadata?.msgId === message.msgId)
+        
+        if (lastAssistantMsg) {
+          // Update existing message
+          updateMessage(lastAssistantMsg.id, message.content)
+        } else {
+          // Add new assistant message
+          addMessage({
+            role: 'assistant',
+            content: message.content,
+            metadata: { 
+              msgId: message.msgId,
+              timestamp: message.ts
+            }
+          })
+        }
+      } else if (message.role === 'user') {
+        addMessage({
+          role: 'user',
+          content: message.content,
+          metadata: { timestamp: message.ts }
+        })
+      }
+      return
+    }
+    
+    // Fall back to old event format for compatibility
     const parsed = UIMessageSchema.safeParse(payload?.details)
     if (!parsed.success) return
     const details = parsed.data

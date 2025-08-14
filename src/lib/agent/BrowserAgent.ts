@@ -62,12 +62,12 @@ import { createExtractTool } from '@/lib/tools/extraction/ExtractTool';
 import { createResultTool } from '@/lib/tools/result/ResultTool';
 import { generateSystemPrompt, generateSingleTurnExecutionPrompt } from './BrowserAgent.prompt';
 import { AIMessage, AIMessageChunk } from '@langchain/core/messages';
-import { EventProcessor } from '@/lib/events/EventProcessor';
 import { PLANNING_CONFIG } from '@/lib/tools/planning/PlannerTool.config';
 import { AbortError } from '@/lib/utils/Abortable';
 import { formatToolOutput } from '@/lib/tools/formatToolOutput';
 import { formatTodoList } from '@/lib/tools/utils/formatTodoList';
 import { GlowAnimationService } from '@/lib/services/GlowAnimationService';
+import { PubSub } from '@/lib/pubsub'; // For static helper methods
 
 // Type Definitions
 interface Plan {
@@ -123,8 +123,8 @@ export class BrowserAgent {
     return this.executionContext.messageManager; 
   }
   
-  private get eventEmitter(): EventProcessor { 
-    return this.executionContext.getEventProcessor(); 
+  private get pubsub(): PubSub { 
+    return this.executionContext.getPubSub(); 
   }
 
   /**
@@ -165,7 +165,7 @@ export class BrowserAgent {
         message = 'Creating a step-by-step plan to complete the task';
       }
       // Tag startup status messages for UI styling
-      this.eventEmitter.info(message, 'startup');
+      this.pubsub.publishMessage(PubSub.createMessage(message, 'system'));
 
       // 3. DELEGATE: Route to the correct execution strategy
       if (classification.is_simple_task) {
@@ -185,7 +185,7 @@ export class BrowserAgent {
                                  (error instanceof Error && error.name === "AbortError");
       
       if (!isUserCancellation) {
-        this.eventEmitter.error(`Oops! Got a fatal error when executing task: ${errorMessage}`, true);  // Mark as fatal error
+        this.pubsub.publishMessage(PubSub.createMessage(`Oops! Got a fatal error when executing task: ${errorMessage}`, 'system'));
       }
       
       throw error;
@@ -198,7 +198,7 @@ export class BrowserAgent {
           await this.glowService.stopGlow(tabId);
         }
       } catch (error) {
-        this.eventEmitter.debug(`Could not stop glow animation: ${error}`);
+        console.error(`Could not stop glow animation: ${error}`);
       }
     }
   }
@@ -219,7 +219,7 @@ export class BrowserAgent {
     // Register all tools first
     this.toolManager.register(createPlannerTool(this.executionContext));
     this.toolManager.register(createTodoManagerTool(this.executionContext));
-    this.toolManager.register(createDoneTool());
+    this.toolManager.register(createDoneTool(this.executionContext));
     
     // Navigation tools
     this.toolManager.register(createNavigationTool(this.executionContext));
@@ -250,7 +250,7 @@ export class BrowserAgent {
   }
 
   private async _classifyTask(task: string): Promise<ClassificationResult> {
-    this.eventEmitter.info('Analyzing task complexity...');
+    this.pubsub.publishMessage(PubSub.createMessage('Analyzing task complexity...', 'system'));
     
     const classificationTool = this.toolManager.get('classification_tool');
     if (!classificationTool) {
@@ -261,14 +261,14 @@ export class BrowserAgent {
     const args = { task };
     
     try {
-      this.eventEmitter.toolStart('classification_tool', args);
+      // Tool start notification not needed in new pub-sub system
       const result = await classificationTool.func(args);
       const parsedResult = JSON.parse(result);
       
       if (parsedResult.ok) {
         const classification = JSON.parse(parsedResult.output);
         const classification_formatted_output = formatToolOutput('classification_tool', parsedResult);
-        this.eventEmitter.toolEnd('classification_tool', true, classification_formatted_output);
+        // Tool end notification not needed in new pub-sub system
         return { 
           is_simple_task: classification.is_simple_task,
           is_followup_task: classification.is_followup_task 
@@ -277,7 +277,7 @@ export class BrowserAgent {
     } catch (error) {
       const errorResult = { ok: false, error: 'Classification failed' };
       const error_formatted_output = formatToolOutput('classification_tool', errorResult);
-      this.eventEmitter.toolEnd('classification_tool', false, error_formatted_output);
+      // Tool end notification not needed in new pub-sub system
     }
     
     // Default to complex task on any failure
@@ -288,12 +288,12 @@ export class BrowserAgent {
   //  Execution Strategy 1: Simple Tasks (No Planning)
   // ===================================================================
   private async _executeSimpleTaskStrategy(task: string): Promise<void> {
-    this.eventEmitter.debug(`Executing as a simple task. Max attempts: ${BrowserAgent.MAX_STEPS_FOR_SIMPLE_TASKS}`);
+    // Debug: Executing as a simple task
 
     for (let attempt = 1; attempt <= BrowserAgent.MAX_STEPS_FOR_SIMPLE_TASKS; attempt++) {
       this.checkIfAborted();  // Manual check in loop
 
-      this.eventEmitter.debug(`Attempt ${attempt}/${BrowserAgent.MAX_STEPS_FOR_SIMPLE_TASKS}: Executing task...`);
+      // Debug: Attempt ${attempt}/${BrowserAgent.MAX_STEPS_FOR_SIMPLE_TASKS}
 
       const instruction = `The user's goal is: "${task}". Please take the next best action to complete this goal and call the 'done_tool' when finished.`;
       const isTaskCompleted = await this._executeSingleTurn(instruction);
@@ -310,7 +310,7 @@ export class BrowserAgent {
   //  Execution Strategy 2: Multi-Step Tasks (Plan -> Execute -> Repeat)
   // ===================================================================
   private async _executeMultiStepStrategy(task: string): Promise<void> {
-    this.eventEmitter.debug('Executing as a complex multi-step task');
+    // Debug: Executing as a complex multi-step task
     let outer_loop_index = 0;
 
     while (outer_loop_index < BrowserAgent.MAX_STEPS_OUTER_LOOP) {
@@ -321,14 +321,14 @@ export class BrowserAgent {
       if (plan.steps.length === 0) {
         throw new Error('Planning failed. Could not generate next steps.');
       }
-      this.eventEmitter.debug('Plan created:', JSON.stringify(plan, null, 2));
+      // Debug: Plan created
 
       // 2. Convert plan to TODOs
       await this._updateTodosFromPlan(plan);
 
       // Show TODO list after plan creation
       const todoStore = this.executionContext.todoStore;
-      this.eventEmitter.info(formatTodoList(todoStore.getJson()));
+      this.pubsub.publishMessage(PubSub.createMessage(formatTodoList(todoStore.getJson()), 'system'));
 
       // 3. EXECUTE: Inner loop with one TODO per turn
       let inner_loop_index = 0;
@@ -377,8 +377,6 @@ export class BrowserAgent {
     
     // This method encapsulates the streaming logic
     const llmResponse = await this._invokeLLMWithStreaming();
-    // console.log("LLM Response:", JSON.stringify(llmResponse, null, 4));
-    
 
     let wasDoneToolCalled = false;
     if (llmResponse.tool_calls && llmResponse.tool_calls.length > 0) {
@@ -413,6 +411,7 @@ export class BrowserAgent {
     let accumulatedChunk: AIMessageChunk | undefined;
     let accumulatedText = '';
     let hasStartedThinking = false;
+    let currentMsgId: string | null = null;
 
     for await (const chunk of stream) {
       this.checkIfAborted();  // Manual check during streaming
@@ -420,19 +419,27 @@ export class BrowserAgent {
       if (chunk.content && typeof chunk.content === 'string') {
         // Start thinking on first real content
         if (!hasStartedThinking) {
-          this.eventEmitter.startThinking();
+          // Start thinking - handled via streaming
           hasStartedThinking = true;
+          // Create message ID on first content chunk
+          currentMsgId = PubSub.generateId('msg_assistant');
         }
         
-        this.eventEmitter.streamThoughtDuringThinking(chunk.content);
+        // Stream thought chunk - will be handled via assistant message streaming
         accumulatedText += chunk.content;
+        
+        // Publish/update the message with accumulated content in real-time
+        if (currentMsgId) {
+          this.pubsub.publishMessage(PubSub.createMessageWithId(currentMsgId, accumulatedText, 'assistant'));
+        }
       }
       accumulatedChunk = !accumulatedChunk ? chunk : accumulatedChunk.concat(chunk);
     }
     
     // Only finish thinking if we started and have content
-    if (hasStartedThinking && accumulatedText.trim()) {
-      this.eventEmitter.finishThinking(accumulatedText);
+    if (hasStartedThinking && accumulatedText.trim() && currentMsgId) {
+      // Final publish with complete message (in case last chunk was missed)
+      this.pubsub.publishMessage(PubSub.createMessageWithId(currentMsgId, accumulatedText, 'assistant'));
     }
     
     if (!accumulatedChunk) return new AIMessage({ content: '' });
@@ -464,7 +471,7 @@ export class BrowserAgent {
       // we'll disable at the end of agent execution
       await this._maybeStartGlowAnimation(toolName);
 
-      this.eventEmitter.toolStart(toolName, args);
+      // Tool start - not needed in new pub-sub system
       const result = await tool.func(args);
       
       // Check abort after tool execution completes
@@ -474,13 +481,14 @@ export class BrowserAgent {
       
       // Format the tool output for display
       const displayMessage = formatToolOutput(toolName, parsedResult);
-      this.eventEmitter.debug('Executing tool: ' + toolName + ' result: ' + displayMessage);
       
-      // Emit tool result for UI display
+      // Publish tool result for UI display
       // Skip emitting refresh_browser_state_tool to prevent browser state from appearing in UI
       // Also skip result_tool to avoid duplicating the final summary in the UI
       if (toolName !== 'refresh_browser_state_tool' && toolName !== 'result_tool') {
-        this.eventEmitter.emitToolResult(toolName, result);
+        //TODO: nikhil -- see if how to merge formatToolOutput to tools itself
+        // const formattedContent = formatToolOutput(toolName, parsedResult);
+        // this.pubsub.publishMessage(PubSub.createMessage(formattedContent, 'system'));
       }
 
       // Add the result back to the message history for context
@@ -504,7 +512,7 @@ export class BrowserAgent {
           `TODO list updated. Current state:\n${todoStore.getXml()}`
         );
         // Show updated TODO list to user
-        this.eventEmitter.info(formatTodoList(todoStore.getJson()));
+        this.pubsub.publishMessage(PubSub.createMessage(formatTodoList(todoStore.getJson()), 'system'));
       }
 
 
@@ -523,13 +531,14 @@ export class BrowserAgent {
       max_steps: BrowserAgent.MAX_STEPS_FOR_COMPLEX_TASKS
     };
 
-    this.eventEmitter.toolStart('planner_tool', args);
+    // Tool start for planner - not needed
     const result = await plannerTool.func(args);
     const parsedResult = JSON.parse(result);
     
     // Format the planner output
     const planner_formatted_output = formatToolOutput('planner_tool', parsedResult);
-    this.eventEmitter.toolEnd('planner_tool', parsedResult.ok, planner_formatted_output);
+    // Publish planner result
+    this.pubsub.publishMessage(PubSub.createMessage(planner_formatted_output, 'system'));
 
     if (parsedResult.ok && parsedResult.output?.steps) {
       return { steps: parsedResult.output.steps };
@@ -553,13 +562,14 @@ export class BrowserAgent {
 
     const args = { task };
     try {
-      this.eventEmitter.toolStart('validator_tool', args);
+      // Tool start for validator - not needed
       const result = await validatorTool.func(args);
       const parsedResult = JSON.parse(result);
       
       // Format the validator output
       const validator_formatted_output = formatToolOutput('validator_tool', parsedResult);
-      this.eventEmitter.toolEnd('validator_tool', parsedResult.ok, validator_formatted_output);
+      // Publish validator result
+      this.pubsub.publishMessage(PubSub.createMessage(validator_formatted_output, 'system'));
       
       if (parsedResult.ok) {
         // Parse the validation data from output
@@ -573,7 +583,8 @@ export class BrowserAgent {
     } catch (error) {
       const errorResult = { ok: false, error: 'Validation failed' };
       const error_formatted_output = formatToolOutput('validator_tool', errorResult);
-      this.eventEmitter.toolEnd('validator_tool', false, error_formatted_output);
+      // Publish validator error
+      this.pubsub.publishMessage(PubSub.createMessage(error_formatted_output, 'system'));
     }
     
     return {
@@ -599,14 +610,14 @@ export class BrowserAgent {
       
       if (parsedResult.ok && parsedResult.output) {
         const { success, message } = parsedResult.output;
-        this.eventEmitter.emitTaskResult(success, message);
+        this.pubsub.publishMessage(PubSub.createMessage(message, 'system'));
       } else {
         // Fallback on error
-        this.eventEmitter.emitTaskResult(true, 'Task completed.');
+        this.pubsub.publishMessage(PubSub.createMessage('Task completed.', 'system'));
       }
     } catch (error) {
       // Fallback on error
-      this.eventEmitter.emitTaskResult(true, 'Task completed.');
+      this.pubsub.publishMessage(PubSub.createMessage('Task completed.', 'system'));
     }
   }
 
@@ -645,7 +656,7 @@ export class BrowserAgent {
       return false;
     } catch (error) {
       // Log but don't fail if we can't manage glow
-      this.eventEmitter.debug(`Could not manage glow for tool ${toolName}: ${error}`);
+      console.error(`Could not manage glow for tool ${toolName}: ${error}`);
       return false;
     }
   }

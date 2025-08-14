@@ -5,6 +5,7 @@ import { toolSuccess, toolError, type ToolOutput } from "@/lib/tools/Tool.interf
 import { findElementPrompt } from "./FindElementTool.prompt"
 import { invokeWithRetry } from "@/lib/utils/retryable"
 import { HumanMessage, SystemMessage } from "@langchain/core/messages"
+import { PubSub } from "@/lib/pubsub"
 
 // Constants
 const INTERACTION_WAIT_MS = 1000
@@ -152,6 +153,10 @@ export class InteractionTool {
         // Click element
         await page.clickElement(nodeId)
         await new Promise(resolve => setTimeout(resolve, INTERACTION_WAIT_MS))
+        
+        // Emit status message
+        this.executionContext.getPubSub().publishMessage(PubSub.createMessage(`👆 Clicked: ${description}`, 'assistant'))
+        
         return toolSuccess(`Clicked element: "${description}"`)
         
       } catch (error) {
@@ -183,6 +188,10 @@ export class InteractionTool {
         await page.clearElement(nodeId)
         await page.inputText(nodeId, text)
         await new Promise(resolve => setTimeout(resolve, INTERACTION_WAIT_MS))
+        
+        // Emit status message
+        this.executionContext.getPubSub().publishMessage(PubSub.createMessage(`⌨️ Typed "${text}" into ${description}`, 'assistant'))
+        
         return toolSuccess(`Typed "${text}" into "${description}"`)
         
       } catch (error) {
@@ -213,6 +222,10 @@ export class InteractionTool {
         // Clear element
         await page.clearElement(nodeId)
         await new Promise(resolve => setTimeout(resolve, INTERACTION_WAIT_MS))
+        
+        // Emit status message
+        this.executionContext.getPubSub().publishMessage(PubSub.createMessage(`🗑️ Cleared: ${description}`, 'assistant'))
+        
         return toolSuccess(`Cleared element: "${description}"`)
         
       } catch (error) {
@@ -228,6 +241,10 @@ export class InteractionTool {
   private async _sendKeys(keys: string): Promise<ToolOutput> {
     const page = await this.executionContext.browserContext.getCurrentPage()
     await page.sendKeys(keys)
+    
+    // Emit status message
+    this.executionContext.getPubSub().publishMessage(PubSub.createMessage(`⌨️ Sent keys: ${keys}`, 'assistant'))
+    
     return toolSuccess(`Sent keys: ${keys}`)
   }
 }

@@ -1,10 +1,10 @@
 import { z } from 'zod'
 import BrowserContext from '../browser/BrowserContext'
 import { MessageManager } from '@/lib/runtime/MessageManager'
-import { EventBus, EventProcessor } from '@/lib/events'
 import { getLLM as getLLMFromProvider } from '@/lib/llm/LangChainProvider'
 import { BaseChatModel } from '@langchain/core/language_models/chat_models'
 import { TodoStore } from '@/lib/runtime/TodoStore'
+import { PubSub } from '@/lib/pubsub'
 
 /**
  * Configuration options for ExecutionContext
@@ -13,8 +13,6 @@ export const ExecutionContextOptionsSchema = z.object({
   browserContext: z.instanceof(BrowserContext),  // Browser context for page operations
   messageManager: z.instanceof(MessageManager),  // Message manager for communication
   debugMode: z.boolean().default(false),  // Whether to enable debug logging
-  eventBus: z.instanceof(EventBus).optional(),  // Event bus for streaming updates
-  eventProcessor: z.instanceof(EventProcessor).optional(),  // Event processor for high-level events
   todoStore: z.instanceof(TodoStore).optional()  // TODO store for complex task management
 })
 
@@ -28,8 +26,6 @@ export class ExecutionContext {
   browserContext: BrowserContext  // Browser context for page operations
   messageManager: MessageManager  // Message manager for communication
   debugMode: boolean  // Whether debug logging is enabled
-  eventBus: EventBus | null = null  // Event bus for streaming updates
-  eventProcessor: EventProcessor | null = null  // Event processor for high-level events
   selectedTabIds: number[] | null = null  // Selected tab IDs
   todoStore: TodoStore  // TODO store for complex task management
   private userInitiatedCancel: boolean = false  // Track if cancellation was user-initiated
@@ -46,8 +42,6 @@ export class ExecutionContext {
     this.browserContext = validatedOptions.browserContext
     this.messageManager = validatedOptions.messageManager
     this.debugMode = validatedOptions.debugMode || false
-    this.eventBus = validatedOptions.eventBus || null
-    this.eventProcessor = validatedOptions.eventProcessor || null
     this.todoStore = validatedOptions.todoStore || new TodoStore()
     this.userInitiatedCancel = false
   }
@@ -60,44 +54,13 @@ export class ExecutionContext {
     return this.selectedTabIds;
   }
 
-  /**
-   * Set the event bus for streaming updates
-   * @param eventBus - The event bus to use
-   */
-  public setEventBus(eventBus: EventBus): void {
-    this.eventBus = eventBus;
-  }
 
   /**
-   * Get the current event bus
-   * @returns The event bus
-   * @throws Error if event bus is not set
+   * Get the PubSub instance (singleton)
+   * @returns The PubSub instance
    */
-  public getEventBus(): EventBus {
-    if (!this.eventBus) {
-      throw new Error('EventBus not set. Call setEventBus first.');
-    }
-    return this.eventBus;
-  }
-
-  /**
-   * Set the event processor for high-level event handling
-   * @param eventProcessor - The event processor to use
-   */
-  public setEventProcessor(eventProcessor: EventProcessor): void {
-    this.eventProcessor = eventProcessor;
-  }
-
-  /**
-   * Get the current event processor
-   * @returns The event processor
-   * @throws Error if event processor is not set
-   */
-  public getEventProcessor(): EventProcessor {
-    if (!this.eventProcessor) {
-      throw new Error('EventProcessor not set. Call setEventProcessor first.');
-    }
-    return this.eventProcessor;
+  public getPubSub(): PubSub {
+    return PubSub.getInstance();
   }
 
   /**

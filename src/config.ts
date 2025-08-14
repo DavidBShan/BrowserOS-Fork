@@ -44,8 +44,4 @@ export function isMockLLMSettings(): boolean {
   return config.MOCK_LLM_SETTINGS
 }
 
-export function isPocMode(): boolean {
-  return false;
-}
-
 export default config 

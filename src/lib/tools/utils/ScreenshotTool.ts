@@ -3,6 +3,7 @@ import { DynamicStructuredTool } from '@langchain/core/tools'
 import { ExecutionContext } from '@/lib/runtime/ExecutionContext'
 import { Logging } from '@/lib/utils/Logging'
 import { toolSuccess, toolError } from '@/lib/tools/Tool.interface'
+import { PubSub } from '@/lib/pubsub'
 
 // Input schema for the screenshot tool
 const ScreenshotToolInputSchema = z.object({})  // No parameters needed
@@ -16,6 +17,9 @@ export function createScreenshotTool(executionContext: ExecutionContext): Dynami
     schema: ScreenshotToolInputSchema,
     func: async (args: ScreenshotToolInput): Promise<string> => {
       try {
+        // Emit status message
+        executionContext.getPubSub().publishMessage(PubSub.createMessage(`📷 Capturing screenshot...`, 'assistant'))
+
         // Get the current page from execution context
         const page = await executionContext.browserContext.getCurrentPage()
         
@@ -35,6 +39,7 @@ export function createScreenshotTool(executionContext: ExecutionContext): Dynami
         }
         
         Logging.log('ScreenshotTool', `Screenshot captured successfully (${base64Data.length} bytes)`, 'info')
+        
         
         // Return success with the base64 data in the output message
         return JSON.stringify(toolSuccess(`Screenshot captured successfully. Base64 data (${base64Data.length} bytes): ${base64Data}`))

@@ -2,6 +2,7 @@ import { z } from "zod"
 import { DynamicStructuredTool } from "@langchain/core/tools"
 import { ExecutionContext } from "@/lib/runtime/ExecutionContext"
 import { toolSuccess, toolError, type ToolOutput } from "@/lib/tools/Tool.interface"
+import { PubSub } from "@/lib/pubsub"
 
 // Constants
 const DEFAULT_VIEWPORT_COUNT = 1
@@ -41,11 +42,19 @@ export class ScrollTool {
 
   private async _scrollDown(page: any): Promise<ToolOutput> {
     await page.scrollDown(DEFAULT_VIEWPORT_COUNT)
+    
+    // Emit status message
+    this.executionContext.getPubSub().publishMessage(PubSub.createMessage(`🔽 Scrolled down ${DEFAULT_VIEWPORT_COUNT} viewport`, 'assistant'))
+    
     return toolSuccess(`Scrolled down ${DEFAULT_VIEWPORT_COUNT} viewport`)
   }
 
   private async _scrollUp(page: any): Promise<ToolOutput> {
     await page.scrollUp(DEFAULT_VIEWPORT_COUNT)
+    
+    // Emit status message
+    this.executionContext.getPubSub().publishMessage(PubSub.createMessage(`🔼 Scrolled up ${DEFAULT_VIEWPORT_COUNT} viewport`, 'assistant'))
+    
     return toolSuccess(`Scrolled up ${DEFAULT_VIEWPORT_COUNT} viewport`)
   }
 
@@ -63,6 +72,10 @@ export class ScrollTool {
     }
 
     const elementInfo = `${element.tag || "unknown"} "${element.text || ""}"`.trim()
+    
+    // Emit status message
+    this.executionContext.getPubSub().publishMessage(PubSub.createMessage(`🎯 Scrolled to element: ${elementInfo}`, 'assistant'))
+    
     return toolSuccess(`Scrolled to element ${index} (${elementInfo})`)
   }
 }

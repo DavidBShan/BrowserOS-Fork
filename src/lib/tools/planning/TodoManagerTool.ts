@@ -2,6 +2,7 @@ import { DynamicStructuredTool } from '@langchain/core/tools'
 import { z } from 'zod'
 import { ExecutionContext } from '@/lib/runtime/ExecutionContext'
 import { toolSuccess, toolError } from '@/lib/tools/Tool.interface'
+import { PubSub } from '@/lib/pubsub'
 
 // Input schema for TODO operations
 const TodoInputSchema = z.object({
@@ -24,6 +25,9 @@ export function createTodoManagerTool(executionContext: ExecutionContext): Dynam
       const todoStore = executionContext.todoStore
       
       try {
+        const messageId = PubSub.generateId('todo_manager_tool')
+        executionContext.getPubSub().publishMessage(PubSub.createMessageWithId(messageId, `📝 Updating TODO list...`, 'assistant'))
+        
         let resultMessage = 'Success'
         
         switch (args.action) {

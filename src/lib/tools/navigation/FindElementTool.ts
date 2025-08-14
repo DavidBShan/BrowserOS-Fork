@@ -5,6 +5,7 @@ import { toolSuccess, toolError, type ToolOutput } from "@/lib/tools/Tool.interf
 import { HumanMessage, SystemMessage } from "@langchain/core/messages"
 import { findElementPrompt } from "./FindElementTool.prompt"
 import { invokeWithRetry } from "@/lib/utils/retryable"
+import { PubSub } from "@/lib/pubsub"
 
 // Input schema for find element operations
 export const FindElementInputSchema = z.object({
@@ -27,6 +28,8 @@ export class FindElementTool {
 
   async execute(input: FindElementInput): Promise<ToolOutput> {
     try {
+      const messageId = PubSub.generateId('find_element_tool')
+      this.executionContext.getPubSub().publishMessage(PubSub.createMessageWithId(messageId, `📝 Finding element...`, 'assistant'))
       // Get browser state
       const browserState = await this.executionContext.browserContext.getBrowserState()
 
@@ -57,6 +60,8 @@ export class FindElementTool {
       if (!foundInClickable && !foundInTypeable) {
         return toolError(`Invalid index ${result.index} returned - element not found`)
       }
+      
+      this.executionContext.getPubSub().publishMessage(PubSub.createMessageWithId(messageId, `📝 Found element at index: ${result.index}`, 'assistant'))
 
       // Return the LLM result directly
       return toolSuccess(JSON.stringify(result))

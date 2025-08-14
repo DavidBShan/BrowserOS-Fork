@@ -3,6 +3,7 @@ import { DynamicStructuredTool } from "@langchain/core/tools"
 import { ExecutionContext } from "@/lib/runtime/ExecutionContext"
 import { toolSuccess, toolError, type ToolOutput } from "@/lib/tools/Tool.interface"
 import { refreshStateToolDescription } from "./RefreshStateTool.prompt"
+import { PubSub } from "@/lib/pubsub"
 
 // Input schema - no inputs needed
 export const RefreshStateInputSchema = z.object({})
@@ -14,6 +15,9 @@ export class RefreshStateTool {
 
   async execute(_input: RefreshStateInput): Promise<ToolOutput> {
     try {
+      const messageId = PubSub.generateId('refresh_state_tool')
+      this.executionContext.getPubSub().publishMessage(PubSub.createMessageWithId(messageId, `🔄 Refreshing browser state...`, 'assistant'))
+
       const browserContext = this.executionContext.browserContext
       if (!browserContext) {
         return toolError("Browser context not available")

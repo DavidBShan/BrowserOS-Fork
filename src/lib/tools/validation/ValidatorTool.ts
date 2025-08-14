@@ -6,6 +6,7 @@ import { generateValidatorSystemPrompt, generateValidatorTaskPrompt } from './Va
 import { toolError } from '@/lib/tools/Tool.interface'
 import { HumanMessage, SystemMessage } from '@langchain/core/messages'
 import { invokeWithRetry } from '@/lib/utils/retryable'
+import { PubSub } from '@/lib/pubsub'
 
 // Input schema
 const ValidatorInputSchema = z.object({
@@ -30,6 +31,8 @@ export function createValidatorTool(executionContext: ExecutionContext): Dynamic
     schema: ValidatorInputSchema,
     func: async (args: ValidatorInput): Promise<string> => {
       try {
+        const messageId = PubSub.generateId('validator_tool')
+        executionContext.getPubSub().publishMessage(PubSub.createMessageWithId(messageId, `📝 Validating task...`, 'assistant'))
         // Get LLM instance
         const llm = await executionContext.getLLM()
         
@@ -87,6 +90,10 @@ export function createValidatorTool(executionContext: ExecutionContext): Dynamic
           confidence: validation.confidence,
           suggestions: validation.suggestions
         }
+        
+        // Emit status message
+        const status = validation.isComplete ? `✅ Task "${args.task}" is completed` : `📍 Task "${args.task}" is incomplete, will continue execution...`
+        executionContext.getPubSub().publishMessage(PubSub.createMessageWithId(messageId, status, 'assistant'))
         
         return JSON.stringify({
           ok: true,

@@ -16,7 +16,9 @@ export const MessageSchema = z.object({
     kind: z.enum(['stream', 'execution', 'tool-result', 'system', 'error', 'cancel', 'task-result']).optional(),  // Normalized message kind
     streamId: z.string().optional(),  // Streaming correlation id
     category: z.string().optional(),  // Optional category from system messages
-    success: z.boolean().optional()  // Success flag for tool/task results
+    success: z.boolean().optional(),  // Success flag for tool/task results
+    msgId: z.string().optional(),  // Message ID for pub-sub system
+    timestamp: z.number().optional()  // Timestamp from pub-sub system
   }).optional()  // Optional metadata
 })
 

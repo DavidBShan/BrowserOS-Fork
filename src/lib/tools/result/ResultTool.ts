@@ -6,6 +6,7 @@ import { generateResultSystemPrompt, generateResultTaskPrompt } from './ResultTo
 import { toolError } from '@/lib/tools/Tool.interface';
 import { HumanMessage, SystemMessage, ToolMessage } from '@langchain/core/messages';
 import { invokeWithRetry } from '@/lib/utils/retryable';
+import { PubSub } from '@/lib/pubsub';
 
 // Input schema - simple
 const ResultInputSchema = z.object({
@@ -29,6 +30,8 @@ export function createResultTool(executionContext: ExecutionContext): DynamicStr
     func: async (args: ResultInput): Promise<string> => {
       try {
         // Get LLM instance from execution context
+        const messageId = PubSub.generateId('result_tool')
+        executionContext.getPubSub().publishMessage(PubSub.createMessageWithId(messageId, `📝 Generating result...`, 'assistant'));
         const llm = await executionContext.getLLM({temperature: 0.3});
         
         // Get message history - filter to only tool messages
@@ -59,6 +62,8 @@ export function createResultTool(executionContext: ExecutionContext): DynamicStr
           ],
           3
         );
+        
+        executionContext.getPubSub().publishMessage(PubSub.createMessageWithId(messageId, `📝 Generated result...`, 'assistant'))
         
         // Format and return result
         return JSON.stringify({
