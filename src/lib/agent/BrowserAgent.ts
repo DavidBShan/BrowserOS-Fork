@@ -59,8 +59,10 @@ import { createGetSelectedTabsTool } from '@/lib/tools/tab/GetSelectedTabsTool';
 import { createClassificationTool } from '@/lib/tools/classification/ClassificationTool';
 import { createValidatorTool } from '@/lib/tools/validation/ValidatorTool';
 import { createScreenshotTool } from '@/lib/tools/utils/ScreenshotTool';
+import { createStorageTool } from '@/lib/tools/utils/StorageTool';
 import { createExtractTool } from '@/lib/tools/extraction/ExtractTool';
 import { createResultTool } from '@/lib/tools/result/ResultTool';
+import { createHumanInputTool } from '@/lib/tools/utils/HumanInputTool';
 import { generateSystemPrompt, generateSingleTurnExecutionPrompt } from './BrowserAgent.prompt';
 import { AIMessage, AIMessageChunk } from '@langchain/core/messages';
 import { PLANNING_CONFIG } from '@/lib/tools/planning/PlannerTool.config';
@@ -68,7 +70,7 @@ import { AbortError } from '@/lib/utils/Abortable';
 import { GlowAnimationService } from '@/lib/services/GlowAnimationService';
 import { NarratorService } from '@/lib/services/NarratorService';
 import { PubSub } from '@/lib/pubsub'; // For static helper methods
-import { Subscription } from '@/lib/pubsub/types';
+import { Subscription, HumanInputResponse } from '@/lib/pubsub/types';
 import { Logging } from '@/lib/utils/Logging';
 
 // Type Definitions
@@ -89,6 +91,7 @@ interface ClassificationResult {
 interface SingleTurnResult {
   doneToolCalled: boolean;
   requirePlanningCalled: boolean;
+  requiresHumanInput: boolean;
 }
 
 export class BrowserAgent {
@@ -98,6 +101,10 @@ export class BrowserAgent {
 
   // Outer loop is -- plan -> execute -> validate
   private static readonly MAX_STEPS_OUTER_LOOP = 100;
+  
+  // Human input constants
+  private static readonly HUMAN_INPUT_TIMEOUT = 600000;  // 10 minutes
+  private static readonly HUMAN_INPUT_CHECK_INTERVAL = 500;  // Check every 500ms
 
   // Inner loop is -- execute TODOs, one after the other.
   private static readonly MAX_STEPS_INNER_LOOP  = 30; 
@@ -275,7 +282,9 @@ export class BrowserAgent {
 
     // util tools
     this.toolManager.register(createScreenshotTool(this.executionContext));
+    this.toolManager.register(createStorageTool(this.executionContext));
     this.toolManager.register(createExtractTool(this.executionContext));
+    this.toolManager.register(createHumanInputTool(this.executionContext));
     
     // Result tool
     this.toolManager.register(createResultTool(this.executionContext));
@@ -344,6 +353,27 @@ export class BrowserAgent {
         return;  // SUCCESS - task result will be generated in execute()
       }
       
+      if (turnResult.requiresHumanInput) {
+        // Human input requested - wait for response
+        const humanResponse = await this._waitForHumanInput();
+        
+        if (humanResponse === 'abort') {
+          // Human aborted the task
+          this.pubsub.publishMessage(PubSub.createMessage('❌ Task aborted by human', 'assistant'));
+          throw new AbortError('Task aborted by human');
+        }
+        
+        // Human clicked "Done" - continue with next iteration
+        this.pubsub.publishMessage(PubSub.createMessage('✅ Human completed manual action. Continuing...', 'thinking'));
+        this.messageManager.addAI('Human has completed the requested manual action. Continuing with the task.');
+        
+        // Clear human input state
+        this.executionContext.clearHumanInputState();
+        
+        // Continue to next attempt
+        continue;
+      }
+      
       // Note: require_planning_tool doesn't make sense for simple tasks
       // but if called, we could escalate to complex strategy      
     }
@@ -408,6 +438,27 @@ export class BrowserAgent {
           break; // Exit inner loop to trigger re-planning
         }
         
+        if (turnResult.requiresHumanInput) {
+          // Human input requested - wait for response
+          const humanResponse = await this._waitForHumanInput();
+          
+          if (humanResponse === 'abort') {
+            // Human aborted the task
+            this.pubsub.publishMessage(PubSub.createMessage('❌ Task aborted by human', 'assistant'));
+            throw new AbortError('Task aborted by human');
+          }
+          
+          // Human clicked "Done" - add to message history and trigger re-planning
+          this.pubsub.publishMessage(PubSub.createMessage('✅ Human completed manual action. Re-planning...', 'thinking'));
+          this.messageManager.addAI('Human has completed the requested manual action. Continuing with the task.');
+          
+          // Clear human input state
+          this.executionContext.clearHumanInputState();
+          
+          // Break inner loop to trigger re-planning
+          break;
+        }
+        
         // Update currentTodos for the next iteration
         if (todoTool) {
           const result = await todoTool.func({ action: 'get' });
@@ -447,9 +498,12 @@ export class BrowserAgent {
     // This method encapsulates the streaming logic
     const llmResponse = await this._invokeLLMWithStreaming();
 
+    console.log(`K tokens:\n${JSON.stringify(llmResponse, null, 2)}`)
+
     const result: SingleTurnResult = {
       doneToolCalled: false,
-      requirePlanningCalled: false
+      requirePlanningCalled: false,
+      requiresHumanInput: false
     };
 
     if (llmResponse.tool_calls && llmResponse.tool_calls.length > 0) {
@@ -461,6 +515,7 @@ export class BrowserAgent {
       const toolsResult = await this._processToolCalls(llmResponse.tool_calls);
       result.doneToolCalled = toolsResult.doneToolCalled;
       result.requirePlanningCalled = toolsResult.requirePlanningCalled;
+      result.requiresHumanInput = toolsResult.requiresHumanInput;
       
     } else if (llmResponse.content) {
       // If the AI responds with text, just add it to the history
@@ -529,7 +584,8 @@ export class BrowserAgent {
   private async _processToolCalls(toolCalls: any[]): Promise<SingleTurnResult> {
     const result: SingleTurnResult = {
       doneToolCalled: false,
-      requirePlanningCalled: false
+      requirePlanningCalled: false,
+      requiresHumanInput: false
     };
     
     for (const toolCall of toolCalls) {
@@ -559,12 +615,10 @@ export class BrowserAgent {
         this.messageManager.addTool(toolResult, toolCallId);
       }
 
-      // Special handling for todo_manager_tool, add system reminder for mutations
+      // Special handling for todo_manager_tool, replace existing todo list message
       if (toolName === 'todo_manager_tool' && parsedResult.ok && args.action === 'set') {
         const markdown = args.todos || '';
-        this.messageManager.addSystemReminder(
-          `TODO list updated:\n${markdown}`
-        );
+        this.messageManager.addTodoList(markdown);
         this.pubsub.publishMessage(PubSub.createMessage(markdown, 'thinking'));
       }
 
@@ -575,6 +629,12 @@ export class BrowserAgent {
       
       if (toolName === 'require_planning_tool' && parsedResult.ok) {
         result.requirePlanningCalled = true;
+      }
+      
+      if (toolName === 'human_input_tool' && parsedResult.ok && parsedResult.requiresHumanInput) {
+        result.requiresHumanInput = true;
+        // Break from the loop immediately to handle human input
+        break;
       }
     }
     
@@ -796,6 +856,59 @@ export class BrowserAgent {
       // Log but don't fail if we can't manage glow
       console.error(`Could not manage glow for tool ${toolName}: ${error}`);
       return false;
+    }
+  }
+
+  /**
+   * Wait for human input with timeout
+   * @returns 'done' if human clicked Done, 'abort' if clicked Skip/Abort, 'timeout' if timed out
+   */
+  private async _waitForHumanInput(): Promise<'done' | 'abort' | 'timeout'> {
+    const startTime = Date.now();
+    const requestId = this.executionContext.getHumanInputRequestId();
+    
+    if (!requestId) {
+      console.error('No human input request ID found');
+      return 'abort';
+    }
+    
+    // Subscribe to human input responses
+    const subscription = this.pubsub.subscribe((event) => {
+      if (event.type === 'human-input-response') {
+        const response = event.payload as HumanInputResponse;
+        if (response.requestId === requestId) {
+          this.executionContext.setHumanInputResponse(response);
+        }
+      }
+    });
+    
+    try {
+      // Poll for response or timeout
+      while (!this.executionContext.shouldAbort()) {
+        // Check if response received
+        const response = this.executionContext.getHumanInputResponse();
+        if (response) {
+          return response.action;  // 'done' or 'abort'
+        }
+        
+        // Check timeout
+        if (Date.now() - startTime > BrowserAgent.HUMAN_INPUT_TIMEOUT) {
+          this.pubsub.publishMessage(
+            PubSub.createMessage('⏱️ Human input timed out after 10 minutes', 'error')
+          );
+          return 'timeout';
+        }
+        
+        // Wait before checking again
+        await new Promise(resolve => setTimeout(resolve, BrowserAgent.HUMAN_INPUT_CHECK_INTERVAL));
+      }
+      
+      // Aborted externally
+      return 'abort';
+      
+    } finally {
+      // Clean up subscription
+      subscription.unsubscribe();
     }
   }
 }

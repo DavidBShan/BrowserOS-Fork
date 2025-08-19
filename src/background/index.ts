@@ -326,6 +326,14 @@ function handlePortMessage(message: PortMessage, port: chrome.runtime.Port): voi
         handleCancelTaskPort(payload as CancelTaskMessage['payload'], port, id)
         break
         
+      case MessageType.HUMAN_INPUT_RESPONSE:
+        // Forward human input response to the execution context
+        if (nxtScape) {
+          const pubsub = PubSub.getInstance()
+          pubsub.publishHumanInputResponse(payload as any)
+        }
+        break
+        
       case MessageType.RESET_CONVERSATION:
         handleResetConversationPort(payload as ResetConversationMessage['payload'], port, id)
         break
