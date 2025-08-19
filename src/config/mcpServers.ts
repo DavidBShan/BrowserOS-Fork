@@ -11,31 +11,8 @@ export const MCPServerConfigSchema = z.object({
 export type MCPServerConfig = z.infer<typeof MCPServerConfigSchema>
 
 // Available MCP servers - names must match Klavis API exactly
+// Currently limited to core Google Workspace and Notion
 export const MCP_SERVERS: MCPServerConfig[] = [
-  {
-    id: 'gmail',
-    name: 'Gmail',
-    subdomain: 'gmail',
-    iconPath: 'assets/mcp_servers/gmail.svg',
-  },
-  {
-    id: 'youtube',
-    name: 'YouTube',
-    subdomain: 'youtube',
-    iconPath: 'assets/mcp_servers/youtube.svg',
-  },
-  {
-    id: 'github',
-    name: 'GitHub',
-    subdomain: 'github',
-    iconPath: 'assets/mcp_servers/github.svg',
-  },
-  {
-    id: 'slack',
-    name: 'Slack',
-    subdomain: 'slack',
-    iconPath: 'assets/mcp_servers/slack.svg',
-  },
   {
     id: 'google-calendar',
     name: 'Google Calendar',
@@ -43,21 +20,27 @@ export const MCP_SERVERS: MCPServerConfig[] = [
     iconPath: 'assets/mcp_servers/google-calendar.svg',
   },
   {
-    id: 'google-drive',
-    name: 'Google Drive',
-    subdomain: 'gdrive',
-    iconPath: 'assets/mcp_servers/google-drive.svg',
+    id: 'gmail',
+    name: 'Gmail',
+    subdomain: 'gmail',
+    iconPath: 'assets/mcp_servers/gmail.svg',
+  },
+  {
+    id: 'google-sheets',
+    name: 'Google Sheets',
+    subdomain: 'gsheets',
+    iconPath: 'assets/mcp_servers/google-sheets.svg',
+  },
+  {
+    id: 'google-docs',
+    name: 'Google Docs',
+    subdomain: 'gdocs',
+    iconPath: 'assets/mcp_servers/google-docs.svg',
   },
   {
     id: 'notion',
     name: 'Notion',
     subdomain: 'notion',
     iconPath: 'assets/mcp_servers/notion.svg',
-  },
-  {
-    id: 'linear',
-    name: 'Linear',
-    subdomain: 'linear',
-    iconPath: 'assets/mcp_servers/linear.svg',
   },
 ]

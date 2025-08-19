@@ -43,9 +43,16 @@ export function Chat({ isConnected }: ChatProps) {
   // Listen for MCP server status
   useEffect(() => {
     const handleMCPStatus = (payload: any) => {
+      // Don't show deletion messages in chat - they're handled by the header toast
+      if (payload.status === 'deleted') {
+        return
+      }
+      
       const status = payload.status === 'success' 
         ? `✓ Connected to ${payload.serverId}`
-        : `Failed to connect to ${payload.serverId}: ${payload.error || 'Unknown error'}`
+        : payload.status === 'auth_failed'
+        ? `Authentication required for ${payload.serverId}. Please complete the authentication process.`
+        : `Failed to connect to ${payload.serverId || 'server'}: ${payload.error || 'Unknown error'}`
       
       upsertMessage({
         msgId: `mcp_status_${Date.now()}`,
