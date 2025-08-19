@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { Logging } from "@/lib/utils/Logging";
 import { BrowserContext } from "@/lib/browser/BrowserContext";
+import { BrowserPage } from "@/lib/browser/BrowserPage";
 import { ExecutionContext } from "@/lib/runtime/ExecutionContext";
 import { MessageManager } from "@/lib/runtime/MessageManager";
 import { profileStart, profileEnd, profileAsync } from "@/lib/utils/profiler";
@@ -179,14 +180,27 @@ export class NxtScape {
       this.executionContext.resetAbortController();
     }
 
-    // Get current page and lock execution
-    profileStart("NxtScape.getCurrentPage");
-    const currentPage = await this.browserContext.getCurrentPage();
-    const currentTabId = currentPage.tabId;
-    profileEnd("NxtScape.getCurrentPage");
-
-    // Lock browser context to current tab
-    this.browserContext.lockExecutionToTab(currentTabId);
+    // Get page based on metadata flag
+    profileStart("NxtScape.getPage");
+    let currentPage: BrowserPage;
+    let currentTabId: number;
+    
+    if (metadata?.runInNewTab) {
+      // Create a new tab for execution
+      currentPage = await this.browserContext.getNewPage();
+      currentTabId = currentPage.tabId;
+      PubSub.getInstance().publishMessage(
+        PubSub.createMessage('🚀 Opening new tab for execution...', 'thinking')
+      );
+      Logging.log("NxtScape", `Using new tab ${currentTabId} for execution`);
+    } else {
+      // Use current tab
+      currentPage = await this.browserContext.getCurrentPage();
+      currentTabId = currentPage.tabId;
+      // Lock browser context to current tab
+      this.browserContext.lockExecutionToTab(currentTabId);
+    }
+    profileEnd("NxtScape.getPage");
 
     // Start execution context
     this.executionContext.startExecution(currentTabId);

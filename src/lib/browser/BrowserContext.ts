@@ -158,6 +158,38 @@ export class BrowserContext {
     });
   }
 
+  /**
+   * Create and get a new page
+   * Opens a new tab and locks execution to it
+   */
+  public async getNewPage(): Promise<BrowserPage> {
+    return profileAsync('BrowserContext.getNewPage', async () => {
+      // Create a new tab with home page URL
+      const newTab = await chrome.tabs.create({ 
+        url: this._config.homePageUrl,
+        active: true 
+      });
+      
+      if (!newTab.id) {
+        throw new Error('Failed to create new tab');
+      }
+      
+      // Wait a bit for tab to initialize
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Get updated tab information
+      const updatedTab = await chrome.tabs.get(newTab.id);
+      const page = await this._getOrCreatePage(updatedTab);
+      
+      // Lock execution to the new tab
+      this.lockExecutionToTab(newTab.id);
+      
+      Logging.log('BrowserContext', `Created new page with tab ${newTab.id} for execution`);
+      
+      return page;
+    });
+  }
+
   // ============= Tab Management =============
 
   /**

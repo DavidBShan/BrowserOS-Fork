@@ -95,7 +95,7 @@ interface ProviderActions {
   removeCustomProvider: (id: string) => void
   getAllProviders: () => Provider[]
   executeProviderAction: (provider: Provider, query: string) => Promise<void>
-  executeAgent: (agent: Agent, query: string) => Promise<void>
+  executeAgent: (agent: Agent, query: string, options?: { runInNewTab?: boolean }) => Promise<void>
 }
 
 export const useProviderStore = create<ProviderState & ProviderActions>()(
@@ -208,7 +208,7 @@ export const useProviderStore = create<ProviderState & ProviderActions>()(
         }
       },
       
-      executeAgent: async (agent, query) => {
+      executeAgent: async (agent, query, options = {}) => {
         try {
           // Get current tab
           const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true })
@@ -236,6 +236,7 @@ export const useProviderStore = create<ProviderState & ProviderActions>()(
               metadata: {
                 source: 'newtab',
                 executionMode: 'predefined',
+                ...(options.runInNewTab && { runInNewTab: true }),
                 predefinedPlan: {
                   agentId: agent.id,
                   steps: agent.steps,
