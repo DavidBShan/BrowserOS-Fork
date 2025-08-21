@@ -4,6 +4,7 @@ import { ExecutionContext } from "@/lib/runtime/ExecutionContext"
 import { toolSuccess, toolError, type ToolOutput } from "@/lib/tools/Tool.interface"
 import { KlavisAPIManager } from "@/lib/mcp/KlavisAPIManager"
 import { MCP_SERVERS } from "@/config/mcpServers"
+import { Logging } from "@/lib/utils/Logging"
 
 // Input schema for MCP operations - runtime only
 const MCPToolInputSchema = z.object({
@@ -171,6 +172,13 @@ export class MCPTool {
         }
       }
       
+      // Log metric for MCP tool call
+      Logging.logMetric('mcp_tool_called', {
+        server_name: instance.name,
+        tool_name: toolName,
+        instance_id: instanceId
+      })
+      
       // Call the tool
       const result = await this.manager.client.callTool(
         instanceId,
@@ -180,8 +188,22 @@ export class MCPTool {
       )
 
       if (!result.success) {
+        // Log metric for tool failure
+        Logging.logMetric('mcp_tool_failed', {
+          server_name: instance.name,
+          tool_name: toolName,
+          error: result.error || 'Tool execution failed',
+          instance_id: instanceId
+        })
         return toolError(result.error || 'Tool execution failed')
       }
+
+      // Log metric for tool success with 10% sampling
+      Logging.logMetric('mcp_tool_success', {
+        server_name: instance.name,
+        tool_name: toolName,
+        instance_id: instanceId
+      }, 0.1)
 
       // Format successful result
       const output = {
@@ -193,6 +215,13 @@ export class MCPTool {
 
       return toolSuccess(JSON.stringify(output))
     } catch (error) {
+      // Log metric for tool failure
+      Logging.logMetric('mcp_tool_failed', {
+        server_name: instance.name,
+        tool_name: toolName,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        instance_id: instanceId
+      })
       return toolError(`Tool execution failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   }

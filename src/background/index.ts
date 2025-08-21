@@ -848,6 +848,14 @@ async function handleMCPInstallServerPort(
       id
     })
     
+    // Log metric for successful MCP server connection
+    Logging.logMetric('mcp_server_connected', {
+      server_name: serverConfig.name,
+      server_id: serverId,
+      instance_id: result.instanceId,
+      authenticated: result.authSuccess !== false
+    })
+    
     debugLog(`MCP server installed successfully: ${serverId} (${result.instanceId}), authenticated: ${result.authSuccess !== false}`)
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Installation failed'
@@ -952,6 +960,11 @@ async function handleMCPDeleteServerPort(
           message: 'Server deleted successfully'
         },
         id
+      })
+      
+      // Log metric for MCP server disconnection
+      Logging.logMetric('mcp_server_disconnected', {
+        instance_id: instanceId
       })
       
       debugLog(`MCP server deleted successfully: ${instanceId}`)
