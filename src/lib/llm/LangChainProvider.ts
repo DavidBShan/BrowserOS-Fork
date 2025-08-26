@@ -148,7 +148,11 @@ export class LangChainProvider {
     this.currentProvider = null
   }
   
-  // Helper to get default model for provider type
+  private _isReasoningModel(modelId: string): boolean {
+    const reasoningModels = ['o1', 'o3', 'o4', 'gpt-5', 'gpt-6']
+    return reasoningModels.some(model => modelId.toLowerCase().includes(model))
+  }
+  
   private _getDefaultModelForProvider(type: string): string {
     switch (type) {
       case 'browseros':
@@ -332,10 +336,11 @@ export class LangChainProvider {
         'warning')
     }
     
-    const model = new ChatOpenAI({
-      modelName: provider.modelId || DEFAULT_OPENAI_MODEL,
-      temperature,
-      maxTokens,
+    const modelId = provider.modelId || DEFAULT_OPENAI_MODEL
+    const isReasoningModel = this._isReasoningModel(modelId)
+    
+    const config: any = {
+      modelName: modelId,
       streaming,
       openAIApiKey: provider.apiKey || 'nokey',
       configuration: {
@@ -343,8 +348,23 @@ export class LangChainProvider {
         apiKey: provider.apiKey || 'nokey',
         dangerouslyAllowBrowser: true
       }
-    })
+    }
     
+    if (isReasoningModel) {
+      config.temperature = 1
+      if (maxTokens) {
+        config.modelKwargs = {
+          max_completion_tokens: maxTokens
+        }
+      }
+    } else {
+      config.temperature = temperature
+      if (maxTokens) {
+        config.maxTokens = maxTokens
+      }
+    }
+    
+    const model = new ChatOpenAI(config)
     return this._patchTokenCounting(model)
   }
   
