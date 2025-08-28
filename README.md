@@ -118,8 +118,8 @@ We'd love your help making BrowserOS better!
 
 BrowserOS is open source under the [AGPL-3.0 license](LICENSE).
 
----
+## 
 
 <p align="center">
-Built with ❤️ from San Francisco.
+Built with ❤️ from San Francisco
 </p>
