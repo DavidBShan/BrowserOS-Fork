@@ -58,7 +58,7 @@ export function createPlannerTool(executionContext: ExecutionContext): DynamicSt
           : browserState;
         
         // Generate prompts
-        const systemPrompt = generatePlannerSystemPrompt();
+        const systemPrompt = generatePlannerSystemPrompt(args.max_steps);
         const taskPrompt = generatePlannerTaskPrompt(
           args.task,
           args.max_steps,
@@ -81,7 +81,8 @@ export function createPlannerTool(executionContext: ExecutionContext): DynamicSt
         const plan = await invokeWithRetry<z.infer<typeof PlanSchema>>(
           structuredLLM,
           messages,
-          3
+          3,
+          { signal: executionContext.abortController.signal }
         );
         
         // Emit status message

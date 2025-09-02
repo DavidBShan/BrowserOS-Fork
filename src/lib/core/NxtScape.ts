@@ -8,6 +8,7 @@ import { BrowserAgent } from "@/lib/agent/BrowserAgent";
 import { ChatAgent } from "@/lib/agent/ChatAgent";
 import { langChainProvider } from "@/lib/llm/LangChainProvider";
 import { PubSub } from "@/lib/pubsub/PubSub";
+import { ExecutionMetadata } from "@/lib/types/messaging";
 
 /**
  * Configuration schema for NxtScape agent
@@ -29,6 +30,7 @@ export const RunOptionsSchema = z.object({
   query: z.string(), // Natural language user query
   mode: z.enum(['chat', 'browse']), // Execution mode: 'chat' for Q&A, 'browse' for automation
   tabIds: z.array(z.number()).optional(), // Optional array of tab IDs for context (e.g., which tabs to summarize) - NOT for agent operation
+  metadata: z.any().optional(), // Execution metadata for controlling execution mode
 });
 
 export type RunOptions = z.infer<typeof RunOptionsSchema>;
@@ -133,6 +135,7 @@ export class NxtScape {
     query: string;
     mode: 'chat' | 'browse';
     tabIds: number[] | undefined;
+    metadata: any;
     currentTabId: number;
     startTime: number;
   }> {
@@ -150,7 +153,7 @@ export class NxtScape {
     }
 
     const parsedOptions = RunOptionsSchema.parse(options);
-    const { query, tabIds, mode } = parsedOptions;
+    const { query, tabIds, mode, metadata } = parsedOptions;
     const startTime = Date.now();
 
     Logging.log(
@@ -194,14 +197,14 @@ export class NxtScape {
     // Publish running status
     PubSub.getInstance().publishExecutionStatus('running');
 
-    return { query, mode, tabIds, currentTabId, startTime };
+    return { query, mode, tabIds, metadata, currentTabId, startTime };
   }
 
   /**
    * Executes the appropriate agent based on mode
    * @private
    */
-  private async _executeAgent(query: string, mode: 'chat' | 'browse'): Promise<void> {
+  private async _executeAgent(query: string, mode: 'chat' | 'browse', metadata?: any): Promise<void> {
     if (mode === 'chat') {
       if (!this.chatAgent) {
         throw new Error('Chat agent not initialized');
@@ -211,7 +214,7 @@ export class NxtScape {
       if (!this.browserAgent) {
         throw new Error('Browser agent not initialized');
       }
-      await this.browserAgent.execute(query);
+      await this.browserAgent.execute(query, metadata as ExecutionMetadata | undefined);
     }
 
     Logging.log("NxtScape", "Agent execution completed");
@@ -276,6 +279,7 @@ export class NxtScape {
       query: string;
       mode: 'chat' | 'browse';
       tabIds: number[] | undefined;
+      metadata: any;
       currentTabId: number;
       startTime: number;
     } | null = null;
@@ -285,7 +289,7 @@ export class NxtScape {
       executionContext = await this._prepareExecution(options);
       
       // Phase 2: Execute agent
-      await this._executeAgent(executionContext.query, executionContext.mode);
+      await this._executeAgent(executionContext.query, executionContext.mode, executionContext.metadata);
       
       // Success: Publish done status
       PubSub.getInstance().publishExecutionStatus('done');
@@ -317,6 +321,14 @@ export class NxtScape {
       
       // Publish cancelled status with message
       PubSub.getInstance().publishExecutionStatus('cancelled', 'Task cancelled by user');
+      // Emit a friendly pause message so UI shows clear state
+      PubSub.getInstance().publishMessage(
+        PubSub.createMessageWithId(
+          'pause_message_id',
+          '✋ Task paused. To continue this task, just type your next request OR use 🔄 to start a new task!',
+          'assistant'
+        )
+      );
     }
   }
 

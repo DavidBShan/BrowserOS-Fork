@@ -153,8 +153,14 @@ export class Logging {
    * Log a metric event using the BrowserOS metrics API with PostHog fallback
    * @param eventName - Name of the event (will be prefixed with "agent.")
    * @param properties - Optional properties to include with the event
+   * @param sampling - Sampling rate between 0 and 1 (default 1.0 = 100%)
    */
-  public static async logMetric(eventName: string, properties?: Record<string, any>): Promise<void> {
+  public static async logMetric(eventName: string, properties?: Record<string, any>, sampling: number = 1.0): Promise<void> {
+    // Apply sampling
+    if (Math.random() > sampling) {
+      return
+    }
+    
     const prefixedEventName = `agent.${eventName}`
     
     // Get manifest version

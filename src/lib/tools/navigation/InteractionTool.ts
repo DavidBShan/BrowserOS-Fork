@@ -110,7 +110,8 @@ export class InteractionTool {
       return await invokeWithRetry<z.infer<typeof _FindElementSchema>>(
         structuredLLM,
         messages,
-        3
+        3,
+        { signal: this.executionContext.abortController.signal }
       );
     }
     
@@ -138,7 +139,8 @@ export class InteractionTool {
       const result = await invokeWithRetry<z.infer<typeof _FindElementSchema>>(
         structuredLLM,
         messages,
-        3
+        3,
+        { signal: this.executionContext.abortController.signal }
       );
       
       // If found, return immediately

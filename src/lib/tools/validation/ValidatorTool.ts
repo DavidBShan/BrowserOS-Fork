@@ -10,6 +10,7 @@ import { PubSub } from '@/lib/pubsub'
 import { TokenCounter } from '@/lib/utils/TokenCounter'
 import { Logging } from '@/lib/utils/Logging'
 import { BrowserStateChunker } from '@/lib/utils/BrowserStateChunker'
+import { trimToMaxTokens } from '@/lib/utils/llmUtils'
 
 // Input schema
 const ValidatorInputSchema = z.object({
@@ -33,7 +34,9 @@ async function _chunkedValidation(
   browserStateString: string,
   messageHistory: string,
   screenshot: string,
-  maxTokens: number
+  maxTokens: number,
+  signal?: AbortSignal,
+  executionContext?: ExecutionContext
 ): Promise<any> {
   const chunker = new BrowserStateChunker(browserStateString, maxTokens)
   const totalChunks = chunker.getTotalChunks()
@@ -53,12 +56,17 @@ async function _chunkedValidation(
     const chunkNote = `\n[VALIDATING CHUNK ${i + 1}/${totalChunks}]\n`
     
     const systemPrompt = generateValidatorSystemPrompt()
-    const taskPrompt = generateValidatorTaskPrompt(
+    let taskPrompt = generateValidatorTaskPrompt(
       args.task,
       chunk + chunkNote,
       messageHistory,
       i === 0 ? screenshot : ''  // Only include screenshot in first chunk
     )
+    
+    // Trim task prompt if executionContext is provided
+    if (executionContext) {
+      taskPrompt = trimToMaxTokens(taskPrompt, executionContext, 0.25)  // 25% reserve for structured output
+    }
     
     const messages = [
       new SystemMessage(systemPrompt),
@@ -73,7 +81,8 @@ async function _chunkedValidation(
       const validation = await invokeWithRetry<z.infer<typeof ValidationResultSchema>>(
         structuredLLM,
         messages,
-        3
+        3,
+        { signal }
       )
       
       // Update aggregated results
@@ -123,9 +132,9 @@ export function createValidatorTool(executionContext: ExecutionContext): Dynamic
           try {
             const currentPage = await executionContext.browserContext.getCurrentPage()
             if (currentPage) {
-              const screenshotBase64 = await currentPage.takeScreenshot()
-              if (screenshotBase64) {
-                screenshot = `data:image/jpeg;base64,${screenshotBase64}`
+              const screenshotDataUrl = await currentPage.takeScreenshot()
+              if (screenshotDataUrl) {
+                screenshot = screenshotDataUrl  // Already a complete data URL
               }
             }
           } catch (error) {
@@ -146,12 +155,15 @@ export function createValidatorTool(executionContext: ExecutionContext): Dynamic
         if (browserStateTokens <= maxTokens) {
           // Single validation - existing logic
           const systemPrompt = generateValidatorSystemPrompt()
-          const taskPrompt = generateValidatorTaskPrompt(
+          let taskPrompt = generateValidatorTaskPrompt(
             args.task,
             browserStateString,
             messageHistory,
             screenshot
           )
+          
+          // Trim task prompt if it exceeds token limits
+          taskPrompt = trimToMaxTokens(taskPrompt, executionContext, 0.25)  // 25% reserve for structured output
           
           const messages = [
             new SystemMessage(systemPrompt),
@@ -165,7 +177,8 @@ export function createValidatorTool(executionContext: ExecutionContext): Dynamic
           const validation = await invokeWithRetry<z.infer<typeof ValidationResultSchema>>(
             structuredLLM,
             messages,
-            3
+            3,
+            { signal: executionContext.abortController.signal }
           )
           
           validationData = {
@@ -182,7 +195,9 @@ export function createValidatorTool(executionContext: ExecutionContext): Dynamic
             browserStateString,
             messageHistory,
             screenshot,
-            maxTokens
+            maxTokens,
+            executionContext.abortController.signal,
+            executionContext
           )
         }
         

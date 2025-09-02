@@ -44,6 +44,7 @@
 import { ExecutionContext } from '@/lib/runtime/ExecutionContext';
 import { MessageManager } from '@/lib/runtime/MessageManager';
 import { ToolManager } from '@/lib/tools/ToolManager';
+import { ExecutionMetadata } from '@/lib/types/messaging';
 import { createPlannerTool } from '@/lib/tools/planning/PlannerTool';
 import { createTodoManagerTool } from '@/lib/tools/planning/TodoManagerTool';
 import { createRequirePlanningTool } from '@/lib/tools/planning/RequirePlanningTool';
@@ -63,6 +64,8 @@ import { createStorageTool } from '@/lib/tools/utils/StorageTool';
 import { createExtractTool } from '@/lib/tools/extraction/ExtractTool';
 import { createResultTool } from '@/lib/tools/result/ResultTool';
 import { createHumanInputTool } from '@/lib/tools/utils/HumanInputTool';
+import { createDateTool } from '@/lib/tools/utility/DateTool';
+import { createMCPTool } from '@/lib/tools/mcp/MCPTool';
 import { generateSystemPrompt, generateSingleTurnExecutionPrompt } from './BrowserAgent.prompt';
 import { AIMessage, AIMessageChunk } from '@langchain/core/messages';
 import { PLANNING_CONFIG } from '@/lib/tools/planning/PlannerTool.config';
@@ -70,8 +73,9 @@ import { AbortError } from '@/lib/utils/Abortable';
 import { GlowAnimationService } from '@/lib/services/GlowAnimationService';
 import { NarratorService } from '@/lib/services/NarratorService';
 import { PubSub } from '@/lib/pubsub'; // For static helper methods
-import { Subscription, HumanInputResponse } from '@/lib/pubsub/types';
+import { HumanInputResponse } from '@/lib/pubsub/types';
 import { Logging } from '@/lib/utils/Logging';
+import { jsonParseToolOutput } from '@/lib/utils/utils';
 
 // Type Definitions
 interface Plan {
@@ -125,7 +129,6 @@ export class BrowserAgent {
   private readonly toolManager: ToolManager;
   private readonly glowService: GlowAnimationService;
   private narrator?: NarratorService;  // Narrator service for human-friendly messages
-  private statusSubscription?: Subscription;  // Subscription to execution status events
 
   constructor(executionContext: ExecutionContext) {
     this.executionContext = executionContext;
@@ -134,7 +137,6 @@ export class BrowserAgent {
     this.narrator = new NarratorService(executionContext);
     
     this._registerTools();
-    this._subscribeToExecutionStatus();
   }
 
   // Getters to access context components
@@ -157,42 +159,48 @@ export class BrowserAgent {
   }
 
   /**
-   * Subscribe to execution status events and handle cancellation
-   */
-  private _subscribeToExecutionStatus(): void {
-    this.statusSubscription = this.pubsub.subscribe((event) => {
-      if (event.type === 'execution-status') {
-        const { status } = event.payload;
-        
-        if (status === 'cancelled') {
-          this.pubsub.publishMessage(PubSub.createMessageWithId('pause_message_id','✋ Task paused. To continue this task, just type your next request OR use 🔄 to start a new task!', 'assistant'));
-          this.executionContext.cancelExecution(true);
-        }
-      }
-    });
-  }
-
-  /**
    * Cleanup method to properly unsubscribe when agent is being destroyed
    */
   public cleanup(): void {
-    if (this.statusSubscription) {
-      this.statusSubscription.unsubscribe();
-      this.statusSubscription = undefined;
-    }
     this.narrator?.cleanup();
   }
 
   /**
    * Main entry point.
    * Orchestrates classification and delegates to the appropriate execution strategy.
+   * @param task - The task/query to execute
+   * @param metadata - Optional execution metadata for controlling execution mode
    */
-  async execute(task: string): Promise<void> {
+  async execute(task: string, metadata?: ExecutionMetadata): Promise<void> {
     try {
       // 1. SETUP: Initialize system prompt and user task
       this._initializeExecution(task);
 
-      // 2. CLASSIFY: Determine the task type
+      // 2. CHECK FOR PREDEFINED PLAN
+      if (metadata?.executionMode === 'predefined' && metadata.predefinedPlan) {
+        // Treat predefined plan as a fresh (non-follow-up) task: clear history and re-init
+        this.messageManager.clear();
+        this._initializeExecution(task);
+        // Route predefined plan through the multi-step strategy using initial plan
+        const predefined = metadata!.predefinedPlan!;
+        this.pubsub.publishMessage(PubSub.createMessage(`Executing agent: ${predefined.name || 'Custom Agent'}`, 'thinking'));
+        // Convert predefined steps to Plan structure
+        const initialPlan: Plan = {
+          steps: predefined.steps.map(step => ({ action: step, reasoning: `Part of agent: ${predefined.name || 'Custom'}` }))
+        };
+        if (predefined.goal) {
+          this.messageManager.addHuman(`User's goal is: ${predefined.goal} and this is the task: ${task}`);
+        }
+        await this._executeMultiStepStrategy(task, initialPlan);
+        await this._generateTaskResult(task);
+        return;
+      }
+      else if (metadata?.executionMode === 'dynamic' && metadata?.source === 'newtab') {
+        // For tasks initiated from new tab, show the startup message with task
+        this.pubsub.publishMessage(PubSub.createMessage(`Executing task: ${task}`, 'thinking'));
+      }
+
+      // 3. STANDARD FLOW: CLASSIFY task type
       const classification = await this._classifyTask(task);
       
       // Clear message history if this is not a follow-up task
@@ -211,14 +219,14 @@ export class BrowserAgent {
       }
       this.pubsub.publishMessage(PubSub.createMessage(message, 'narration'));
 
-      // 3. DELEGATE: Route to the correct execution strategy
+      // 4. DELEGATE: Route to the correct execution strategy
       if (classification.is_simple_task) {
         await this._executeSimpleTaskStrategy(task);
       } else {
         await this._executeMultiStepStrategy(task);
       }
 
-      // 4. FINALISE: Generate final result
+      // 5. FINALISE: Generate final result
       await this._generateTaskResult(task);
     } catch (error) {
       this._handleExecutionError(error, task);
@@ -226,11 +234,7 @@ export class BrowserAgent {
       // Cleanup narrator service
       this.narrator?.cleanup();
       
-      // Cleanup status subscription
-      if (this.statusSubscription) {
-        this.statusSubscription.unsubscribe();
-        this.statusSubscription = undefined;
-      }
+      // No status subscription cleanup needed; cancellation is centralized via AbortController
       
       // Ensure glow animation is stopped at the end of execution
       try {
@@ -285,12 +289,13 @@ export class BrowserAgent {
     this.toolManager.register(createStorageTool(this.executionContext));
     this.toolManager.register(createExtractTool(this.executionContext));
     this.toolManager.register(createHumanInputTool(this.executionContext));
+    this.toolManager.register(createDateTool(this.executionContext));
     
     // Result tool
     this.toolManager.register(createResultTool(this.executionContext));
     
     // MCP tool for external integrations
-    // this.toolManager.register(createMCPTool(this.executionContext));
+    this.toolManager.register(createMCPTool(this.executionContext));
     
     // Register classification tool last with all tool descriptions
     const toolDescriptions = this.toolManager.getDescriptions();
@@ -309,10 +314,10 @@ export class BrowserAgent {
     try {
       // Tool start notification not needed in new pub-sub system
       const result = await classificationTool.func(args);
-      const parsedResult = JSON.parse(result);
+      const parsedResult = jsonParseToolOutput(result);
       
       if (parsedResult.ok) {
-        const classification = JSON.parse(parsedResult.output);
+        const classification = parsedResult.output;
         // Tool end notification not needed in new pub-sub system
         return { 
           is_simple_task: classification.is_simple_task,
@@ -384,15 +389,23 @@ export class BrowserAgent {
   // ===================================================================
   //  Execution Strategy 2: Multi-Step Tasks (Plan -> Execute -> Repeat)
   // ===================================================================
-  private async _executeMultiStepStrategy(task: string): Promise<void> {
+  private async _executeMultiStepStrategy(task: string, initialPlan?: Plan): Promise<void> {
     // Debug: Executing as a complex multi-step task
     let outer_loop_index = 0;
 
     while (outer_loop_index < BrowserAgent.MAX_STEPS_OUTER_LOOP) {
       this.checkIfAborted();
 
-      // 1. PLAN: Create a new plan and show for editing
-      const plan = await this._createMultiStepPlanWithPreview(task);
+      // 1. PLAN: Use provided initial plan for first cycle, otherwise create a new plan
+      let plan: Plan;
+      if (outer_loop_index === 0 && initialPlan) {
+        // Use the provided initial plan without creating a new one
+        plan = initialPlan;
+        this.pubsub.publishMessage(PubSub.createMessage(`Using predefined plan with ${initialPlan.steps.length} steps`, 'thinking'));
+      } else {
+        // Create a new plan for subsequent iterations or when no initial plan
+        plan = await this._createMultiStepPlan(task);
+      }
 
       // 2. Convert plan to TODOs
       await this._updateTodosFromPlan(plan);
@@ -402,7 +415,7 @@ export class BrowserAgent {
       let currentTodos = '';
       if (todoTool) {
         const result = await todoTool.func({ action: 'get' });
-        const parsedResult = JSON.parse(result);
+        const parsedResult = jsonParseToolOutput(result);
         currentTodos = parsedResult.output || '';
         this.pubsub.publishMessage(PubSub.createMessage(currentTodos, 'thinking'));
       }
@@ -462,7 +475,7 @@ export class BrowserAgent {
         // Update currentTodos for the next iteration
         if (todoTool) {
           const result = await todoTool.func({ action: 'get' });
-          const parsedResult = JSON.parse(result);
+          const parsedResult = jsonParseToolOutput(result);
           currentTodos = parsedResult.output || '';
         }
       }
@@ -498,7 +511,7 @@ export class BrowserAgent {
     // This method encapsulates the streaming logic
     const llmResponse = await this._invokeLLMWithStreaming();
 
-    // console.log(`K tokens:\n${JSON.stringify(llmResponse, null, 2)}`)
+    console.log(`K tokens:\n${JSON.stringify(llmResponse, null, 2)}`)
 
     const result: SingleTurnResult = {
       doneToolCalled: false,
@@ -600,7 +613,7 @@ export class BrowserAgent {
       await this._maybeStartGlowAnimation(toolName);
 
       const toolResult = await tool.func(args);
-      const parsedResult = JSON.parse(toolResult);
+      const parsedResult = jsonParseToolOutput(toolResult);
       
 
       // Add the result back to the message history for context
@@ -650,7 +663,7 @@ export class BrowserAgent {
 
     // Tool start for planner - not needed
     const result = await plannerTool.func(args);
-    const parsedResult = JSON.parse(result);
+    const parsedResult = jsonParseToolOutput(result);
     
     // Check for errors first
     if (!parsedResult.ok) {
@@ -744,18 +757,18 @@ export class BrowserAgent {
     try {
       // Tool start for validator - not needed
       const result = await validatorTool.func(args);
-      const parsedResult = JSON.parse(result);
+      const parsedResult = jsonParseToolOutput(result);
       
       // Publish validator result
       if (parsedResult.ok) {
-        const validationData = JSON.parse(parsedResult.output);
+        const validationData = parsedResult.output;
         const status = validationData.isComplete ? 'Complete' : 'Incomplete';
         this.pubsub.publishMessage(PubSub.createMessage(`Task validation: ${status}`, 'thinking'));
       }
       
       if (parsedResult.ok) {
-        // Parse the validation data from output
-        const validationData = JSON.parse(parsedResult.output);
+        // Use the validation data from output
+        const validationData = parsedResult.output;
         return {
           isComplete: validationData.isComplete,
           reasoning: validationData.reasoning,
@@ -786,7 +799,7 @@ export class BrowserAgent {
     try {
       const args = { task };
       const result = await resultTool.func(args);
-      const parsedResult = JSON.parse(result);
+      const parsedResult = jsonParseToolOutput(result);
       
       if (parsedResult.ok && parsedResult.output) {
         const { message } = parsedResult.output;

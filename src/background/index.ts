@@ -10,6 +10,7 @@ import { GlowAnimationService } from '@/lib/services/GlowAnimationService'
 import { KlavisAPIManager } from '@/lib/mcp/KlavisAPIManager'
 import { MCP_SERVERS } from '@/config/mcpServers'
 import { PubSub, PubSubEvent } from '@/lib/pubsub'
+import { PlanGeneratorService } from '@/lib/services/PlanGeneratorService'
 
 /**
  * Background script for the ParallelManus extension
@@ -379,6 +380,22 @@ function handlePortMessage(message: PortMessage, port: chrome.runtime.Port): voi
       case MessageType.MCP_INSTALL_SERVER:
         handleMCPInstallServerPort(payload as { serverId: string }, port, id)
         break
+
+      case MessageType.MCP_GET_INSTALLED_SERVERS:
+        handleMCPGetInstalledServersPort(port, id)
+        break
+      
+      case MessageType.MCP_DELETE_SERVER:
+        handleMCPDeleteServerPort(payload as { instanceId: string }, port, id)
+        break
+
+      // Plan generation and refinement from New Tab
+      case MessageType.GENERATE_PLAN:
+        handleGeneratePlanPort(payload as { input: string; context?: string; maxSteps?: number }, port, id)
+        break
+
+      case MessageType.REFINE_PLAN:
+        handleRefinePlanPort(payload as { currentPlan: { goal?: string; steps: string[] }; feedback: string; maxSteps?: number }, port, id)
         
       default:
         // Unknown port message type
@@ -432,18 +449,21 @@ function getStatusFromAction(action: string): 'thinking' | 'executing' | 'comple
  * @param id - Message ID for response tracking
  */
 async function handleExecuteQueryPort(
-  payload: { query: string; tabIds?: number[]; source?: string; chatMode?: boolean },
+  payload: { query: string; tabIds?: number[]; source?: string; chatMode?: boolean, metadata?: any },
   port: chrome.runtime.Port,
   id?: string
 ): Promise<void> {
   try {
-    // Enhanced debug logging
-    debugLog(`🎯 [Background] Received query execution from ${payload.source || 'unknown'}`)
+    // Enhanced debug logging with metadata info
+    const source = payload.metadata?.source || payload.source || 'unknown'
+    const executionMode = payload.metadata?.executionMode || 'dynamic'
+    debugLog(`🎯 [Background] Received query execution from ${source} (mode: ${executionMode})`)
     
     Logging.logMetric('query_initiated', {
       query: payload.query,
-      source: payload.source || 'unknown',
+      source: source,
       mode: payload.chatMode ? 'chat' : 'browse',
+      executionMode: executionMode,
     })
     
     // Initialize NxtScape if not already done
@@ -464,6 +484,7 @@ async function handleExecuteQueryPort(
       query: payload.query,
       mode: payload.chatMode ? 'chat' : 'browse',  // Convert boolean to explicit mode
       tabIds: payload.tabIds,
+      metadata: payload.metadata
     })
     
     // NxtScape execution completed - all messaging handled via PubSub
@@ -835,6 +856,14 @@ async function handleMCPInstallServerPort(
       id
     })
     
+    // Log metric for successful MCP server connection
+    Logging.logMetric('mcp_server_connected', {
+      server_name: serverConfig.name,
+      server_id: serverId,
+      instance_id: result.instanceId,
+      authenticated: result.authSuccess !== false
+    })
+    
     debugLog(`MCP server installed successfully: ${serverId} (${result.instanceId}), authenticated: ${result.authSuccess !== false}`)
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Installation failed'
@@ -851,6 +880,119 @@ async function handleMCPInstallServerPort(
     })
     
     debugLog(`MCP server installation failed: ${serverId} - ${errorMessage}`, 'error')
+  }
+}
+
+/**
+ * Handles getting installed MCP servers
+ * @param port - Port to send response through
+ * @param id - Optional message ID for correlation
+ */
+async function handleMCPGetInstalledServersPort(
+  port: chrome.runtime.Port,
+  id?: string
+): Promise<void> {
+  debugLog('Getting installed MCP servers')
+  
+  try {
+    const manager = KlavisAPIManager.getInstance()
+    const installedServers = await manager.getInstalledServers()
+    
+    // Map server data with config icons
+    const serversWithConfig = installedServers.map(server => {
+      const config = MCP_SERVERS.find(s => s.name === server.name)
+      return {
+        id: server.id,
+        name: server.name,
+        description: server.description,
+        authenticated: server.isAuthenticated,
+        authNeeded: server.authNeeded,
+        iconPath: config?.iconPath || null,
+        toolCount: server.tools?.length || 0
+      }
+    })
+    
+    port.postMessage({
+      type: MessageType.WORKFLOW_STATUS,
+      payload: {
+        status: 'success',
+        data: {
+          servers: serversWithConfig
+        }
+      },
+      id
+    })
+    
+    debugLog(`Found ${serversWithConfig.length} installed MCP servers`)
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Failed to get installed servers'
+    
+    port.postMessage({
+      type: MessageType.WORKFLOW_STATUS,
+      payload: {
+        status: 'error',
+        error: errorMessage
+      },
+      id
+    })
+    
+    debugLog(`Error getting installed MCP servers: ${errorMessage}`, 'error')
+  }
+}
+
+/**
+ * Handles deleting an MCP server
+ * @param payload - Contains instanceId of server to delete
+ * @param port - Port to send response through
+ * @param id - Optional message ID for correlation
+ */
+async function handleMCPDeleteServerPort(
+  payload: { instanceId: string },
+  port: chrome.runtime.Port,
+  id?: string
+): Promise<void> {
+  const { instanceId } = payload
+  
+  debugLog(`MCP server deletion requested: ${instanceId}`)
+  
+  try {
+    const manager = KlavisAPIManager.getInstance()
+    const success = await manager.deleteServer(instanceId)
+    
+    if (success) {
+      port.postMessage({
+        type: MessageType.MCP_SERVER_STATUS,
+        payload: {
+          status: 'deleted',
+          instanceId,
+          message: 'Server deleted successfully'
+        },
+        id
+      })
+      
+      // Log metric for MCP server disconnection
+      Logging.logMetric('mcp_server_disconnected', {
+        instance_id: instanceId
+      })
+      
+      debugLog(`MCP server deleted successfully: ${instanceId}`)
+    } else {
+      throw new Error('Failed to delete server')
+    }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Deletion failed'
+    
+    port.postMessage({
+      type: MessageType.MCP_SERVER_STATUS,
+      payload: {
+        status: 'error',
+        instanceId,
+        error: errorMessage
+      },
+      id
+    })
+    
+    debugLog(`MCP server deletion failed: ${instanceId} - ${errorMessage}`, 'error')
   }
 }
 
@@ -881,5 +1023,96 @@ function stopProvidersPolling(): void {
   if (providersPollIntervalId !== null) {
     clearInterval(providersPollIntervalId as unknown as number)
     providersPollIntervalId = null
+  }
+}
+
+/**
+ * Helper to post plan generation updates back to the sender
+ */
+function postPlanUpdate(
+  port: chrome.runtime.Port,
+  id: string | undefined,
+  update: {
+    status: 'queued' | 'started' | 'thinking' | 'done' | 'error';
+    content?: string;
+    structured?: { steps: Array<{ action: string; reasoning: string }>; goal?: string; name?: string };
+    error?: string;
+  }
+): void {
+  port.postMessage({
+    type: MessageType.PLAN_GENERATION_UPDATE,
+    payload: {
+      status: update.status,
+      content: update.content,
+      structured: update.structured,
+      plan: update.structured 
+        ? { 
+            goal: update.structured.goal, 
+            name: update.structured.name, 
+            steps: update.structured.steps.map(s => s.action) 
+          } 
+        : undefined,
+      error: update.error
+    },
+    id
+  })
+
+  // Also mirror updates to side panel via PubSub so users see progress
+  try {
+    const text = update.content || (update.status === 'done' && update.structured ? `Generated plan with ${update.structured.steps.length} steps` : `Status: ${update.status}`)
+    if (update.status === 'error') {
+      pubsub.publishMessage(PubSub.createMessage(update.error ? `Plan error: ${update.error}` : 'Plan generation failed', 'error'))
+    } else if (update.status === 'done') {
+      pubsub.publishMessage(PubSub.createMessage(text, 'thinking'))
+    } else {
+      pubsub.publishMessage(PubSub.createMessage(text, 'thinking'))
+    }
+  } catch (_e) {
+    // Best-effort only
+  }
+}
+
+/**
+ * Handle GENERATE_PLAN from new tab
+ */
+async function handleGeneratePlanPort(
+  payload: { input: string; context?: string; maxSteps?: number },
+  port: chrome.runtime.Port,
+  id?: string
+): Promise<void> {
+  try {
+    const service = new PlanGeneratorService()
+    postPlanUpdate(port, id, { status: 'started', content: 'Starting plan generation…' })
+    const plan = await service.generatePlan(payload.input, {
+      context: payload.context,
+      maxSteps: payload.maxSteps,
+      onUpdate: (u) => postPlanUpdate(port, id, u)
+    })
+    postPlanUpdate(port, id, { status: 'done', content: 'Plan generated', structured: plan })
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error)
+    postPlanUpdate(port, id, { status: 'error', content: 'Plan generation failed', error: msg })
+  }
+}
+
+/**
+ * Handle REFINE_PLAN from new tab
+ */
+async function handleRefinePlanPort(
+  payload: { currentPlan: { goal?: string; steps: string[] }; feedback: string; maxSteps?: number },
+  port: chrome.runtime.Port,
+  id?: string
+): Promise<void> {
+  try {
+    const service = new PlanGeneratorService()
+    postPlanUpdate(port, id, { status: 'started', content: 'Starting plan refinement…' })
+    const plan = await service.refinePlan({ goal: payload.currentPlan.goal, steps: payload.currentPlan.steps || [] }, payload.feedback, {
+      maxSteps: payload.maxSteps,
+      onUpdate: (u) => postPlanUpdate(port, id, u)
+    })
+    postPlanUpdate(port, id, { status: 'done', content: 'Plan refined', structured: plan })
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error)
+    postPlanUpdate(port, id, { status: 'error', content: 'Plan refinement failed', error: msg })
   }
 }

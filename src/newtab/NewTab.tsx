@@ -2,12 +2,27 @@ import React, { useEffect, useState } from 'react'
 import { CommandInput } from './components/CommandInput'
 import { ThemeToggle } from './components/ThemeToggle'
 import { SettingsDialog } from './components/SettingsDialog'
+import { CreateAgentPage } from './pages/CreateAgentPage'
+import { UserAgentsSection } from './components/UserAgentsSection'
 import { useSettingsStore } from '@/sidepanel/stores/settingsStore'
+import { useAgentsStore } from './stores/agentsStore'
 import { Settings } from 'lucide-react'
 
 export function NewTab() {
   const { theme, fontSize } = useSettingsStore()
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const [currentView, setCurrentView] = useState<'main' | 'create-agent'>('main')
+  const { loadAgents } = useAgentsStore()
+  
+  // Load agents from storage on mount
+  useEffect(() => {
+    // Load agents from storage
+    chrome.storage.local.get('agents', (result) => {
+      if (result.agents) {
+        loadAgents(result.agents)
+      }
+    })
+  }, [loadAgents])
   
   // Apply theme and font size
   useEffect(() => {
@@ -17,6 +32,11 @@ export function NewTab() {
     if (theme === 'dark') root.classList.add('dark')
     if (theme === 'gray') root.classList.add('gray')
   }, [theme, fontSize])
+  
+  // Render create agent page if view is set
+  if (currentView === 'create-agent') {
+    return <CreateAgentPage onBack={() => setCurrentView('main')} />
+  }
   
   
   return (
@@ -46,7 +66,7 @@ export function NewTab() {
       </div>
       
       {/* Main Content - Centered (slightly above center for better visual balance) */}
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex flex-col items-center justify-center">
         <div className="w-full max-w-3xl px-4 -mt-20">
           {/* BrowserOS Branding */}
           <div className="flex items-center justify-center mb-10">
@@ -61,8 +81,11 @@ export function NewTab() {
           </div>
           
           {/* Command Input - Clean and Centered */}
-          <CommandInput />
+          <CommandInput onCreateAgent={() => setCurrentView('create-agent')} />
         </div>
+        
+        {/* User Agents Section - Shows up to 4 random agents */}
+        <UserAgentsSection onEditAgent={() => setCurrentView('create-agent')} />
       </div>
       
       {/* Settings Dialog */}
