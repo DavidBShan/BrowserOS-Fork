@@ -27,7 +27,7 @@
 
 🔒 Privacy first - use your own API keys or run local models with Ollama. Your data stays on your computer.
 
-💡 Join our [Discord](https://discord.gg/YKwjt5vuKr) and help us build! Have feature requests? [Suggest anonymously here](https://dub.sh/nxtscape-feature-request).
+💡 Join our [Discord](https://discord.gg/YKwjt5vuKr) and help us build! Have feature requests? [Suggest here](https://github.com/browseros-ai/BrowserOS/issues/99).
 
 ## Quick start
 
@@ -110,7 +110,7 @@ They're a search/ad company. Your browser history becomes their product. We keep
 We'd love your help making BrowserOS better!
 
 - 🐛 [Report bugs](https://github.com/nxtscape/nxtscape/issues)
-- 💡 [Suggest features](https://dub.sh/nxtscape-feature-request)
+- 💡 [Suggest features](https://github.com/browseros-ai/BrowserOS/issues/99)
 - 💬 [Join Discord](https://discord.gg/YKwjt5vuKr)
 - 🐦 [Follow on Twitter](https://x.com/browserOS_ai)
 
