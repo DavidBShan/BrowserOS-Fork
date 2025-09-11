@@ -1,24 +1,24 @@
-From 6dba6670743ee9f55c029870a0561d1e4de05ad2 Mon Sep 17 00:00:00 2001
+From 06c3fcded5e2f84bde1d7d6bc88f135e00875621 Mon Sep 17 00:00:00 2001
 From: Nikhil Sonti <nikhilsv92@gmail.com>
 Date: Fri, 5 Sep 2025 10:33:27 -0700
-Subject: [PATCH] browseros api updates v2: execute javascript, highlights,
- screenshot with dimension
+Subject: [PATCH] browseros api updates v2: execute js, highlights, screenshot
 
 ---
- .../api/browser_os/browser_os_api.cc          | 307 ++++++++++++++++--
- .../api/browser_os/browser_os_api.h           |  59 +++-
- .../api/browser_os/browser_os_api_helpers.cc  | 270 ++++++++++++++-
- .../api/browser_os/browser_os_api_helpers.h   |  21 ++
+ .../api/browser_os/browser_os_api.cc          | 317 ++++++++++++++--
+ .../api/browser_os/browser_os_api.h           |  60 +++-
+ .../api/browser_os/browser_os_api_helpers.cc  | 340 +++++++++++++++---
+ .../api/browser_os/browser_os_api_helpers.h   |  25 +-
  .../api/browser_os/browser_os_api_utils.cc    |   2 +-
  .../api/browser_os/browser_os_api_utils.h     |   2 +
- .../browser_os_snapshot_processor.cc          |   4 +
+ .../browser_os_snapshot_processor.cc          |  78 +++-
+ .../browser_os_snapshot_processor.h           |  27 +-
  .../chrome_extensions_browser_api_provider.cc |   1 +
  chrome/common/extensions/api/browser_os.idl   |  43 +++
  .../extension_function_histogram_value.h      |   3 +
- 10 files changed, 680 insertions(+), 32 deletions(-)
+ 11 files changed, 786 insertions(+), 112 deletions(-)
 
 diff --git a/chrome/browser/extensions/api/browser_os/browser_os_api.cc b/chrome/browser/extensions/api/browser_os/browser_os_api.cc
-index 5242a1c3f930c..789218f333a04 100644
+index 5242a1c3f930c..8065045e17330 100644
 --- a/chrome/browser/extensions/api/browser_os/browser_os_api.cc
 +++ b/chrome/browser/extensions/api/browser_os/browser_os_api.cc
 @@ -11,6 +11,7 @@
@@ -29,7 +29,15 @@ index 5242a1c3f930c..789218f333a04 100644
  #include "chrome/browser/profiles/profile.h"
  #include "components/prefs/pref_service.h"
  #include "base/json/json_writer.h"
-@@ -178,6 +179,7 @@ ExtensionFunction::ResponseAction BrowserOSGetInteractiveSnapshotFunction::Run()
+@@ -35,6 +36,7 @@
+ #include "content/public/browser/render_frame_host.h"
+ #include "content/public/browser/render_widget_host.h"
+ #include "content/public/browser/render_widget_host_view.h"
++#include "content/browser/renderer_host/render_widget_host_view_base.h"
+ #include "content/public/browser/web_contents.h"
+ #include "third_party/blink/public/common/input/web_input_event.h"
+ #include "third_party/blink/public/common/input/web_mouse_event.h"
+@@ -178,6 +180,7 @@ ExtensionFunction::ResponseAction BrowserOSGetInteractiveSnapshotFunction::Run()
    }
    
    content::WebContents* web_contents = tab_info->web_contents;
@@ -37,9 +45,17 @@ index 5242a1c3f930c..789218f333a04 100644
    
    // Note: We don't need to get scale factors here!
    // The accessibility tree provides bounds in CSS pixels (logical pixels),
-@@ -194,6 +196,18 @@ ExtensionFunction::ResponseAction BrowserOSGetInteractiveSnapshotFunction::Run()
-     LOG(INFO) << "Viewport size: " << viewport_size_.ToString();
-   }
+@@ -186,14 +189,19 @@ ExtensionFunction::ResponseAction BrowserOSGetInteractiveSnapshotFunction::Run()
+   
+   // Store tab ID for mapping
+   tab_id_ = tab_info->tab_id;
+-  
+-  // Get viewport size
+-  content::RenderWidgetHostView* rwhv = web_contents->GetRenderWidgetHostView();
+-  if (rwhv) {
+-    viewport_size_ = rwhv->GetVisibleViewportSize();
+-    LOG(INFO) << "Viewport size: " << viewport_size_.ToString();
+-  }
  
 +  // Check frame stability before requesting snapshot
 +  content::RenderFrameHost* rfh = web_contents->GetPrimaryMainFrame();
@@ -56,7 +72,7 @@ index 5242a1c3f930c..789218f333a04 100644
    // Request accessibility tree snapshot
    web_contents->RequestAXTreeSnapshot(
        base::BindOnce(
-@@ -204,12 +218,37 @@ ExtensionFunction::ResponseAction BrowserOSGetInteractiveSnapshotFunction::Run()
+@@ -204,18 +212,43 @@ ExtensionFunction::ResponseAction BrowserOSGetInteractiveSnapshotFunction::Run()
        /* max_nodes= */ 0,  // No limit
        /* timeout= */ base::TimeDelta(),
        content::WebContents::AXTreeSnapshotPolicy::kAll);
@@ -94,7 +110,14 @@ index 5242a1c3f930c..789218f333a04 100644
    // Simple API layer - just delegates to the processor
    SnapshotProcessor::ProcessAccessibilityTree(
        tree_update,
-@@ -620,10 +659,16 @@ ExtensionFunction::ResponseAction BrowserOSSendKeysFunction::Run() {
+       tab_id_,
+       next_snapshot_id_++,
+-      viewport_size_,
++      web_contents_,
+       base::BindOnce(
+           &BrowserOSGetInteractiveSnapshotFunction::OnSnapshotProcessed,
+           base::WrapRefCounted(this)));
+@@ -620,10 +653,16 @@ ExtensionFunction::ResponseAction BrowserOSSendKeysFunction::Run() {
  
  // Implementation of BrowserOSCaptureScreenshotFunction
  
@@ -111,7 +134,7 @@ index 5242a1c3f930c..789218f333a04 100644
  
    // Get the target tab
    std::string error_message;
-@@ -635,6 +680,8 @@ ExtensionFunction::ResponseAction BrowserOSCaptureScreenshotFunction::Run() {
+@@ -635,6 +674,8 @@ ExtensionFunction::ResponseAction BrowserOSCaptureScreenshotFunction::Run() {
    }
    
    content::WebContents* web_contents = tab_info->web_contents;
@@ -120,7 +143,7 @@ index 5242a1c3f930c..789218f333a04 100644
    
    // Get the render widget host view
    content::RenderFrameHost* rfh = web_contents->GetPrimaryMainFrame();
-@@ -655,51 +702,120 @@ ExtensionFunction::ResponseAction BrowserOSCaptureScreenshotFunction::Run() {
+@@ -655,51 +696,120 @@ ExtensionFunction::ResponseAction BrowserOSCaptureScreenshotFunction::Run() {
    // Get the view bounds to determine the size
    gfx::Rect view_bounds = rwhv->GetViewBounds();
    
@@ -179,13 +202,21 @@ index 5242a1c3f930c..789218f333a04 100644
 +    }
 +    
 +    target_size_ = thumbnail_size;
-+  }
-+  
+   }
+   
+-  gfx::Size thumbnail_size = view_bounds.size();
 +  // Store target size for later use
 +  
 +  // Draw highlights first, then capture after a short delay
 +  DrawHighlightsAndCapture();
-+  
+   
+-  // Scale down proportionally if needed
+-  if (thumbnail_size.width() > max_dimension || 
+-      thumbnail_size.height() > max_dimension) {
+-    float scale = std::min(
+-        static_cast<float>(max_dimension) / thumbnail_size.width(),
+-        static_cast<float>(max_dimension) / thumbnail_size.height());
+-    thumbnail_size = gfx::ScaleToFlooredSize(thumbnail_size, scale);
 +  return RespondLater();
 +}
 +
@@ -220,22 +251,14 @@ index 5242a1c3f930c..789218f333a04 100644
 +  if (!web_contents_) {
 +    Respond(Error("Web contents destroyed"));
 +    return;
-   }
-   
--  gfx::Size thumbnail_size = view_bounds.size();
++  }
++  
 +  content::RenderFrameHost* rfh = web_contents_->GetPrimaryMainFrame();
 +  if (!rfh) {
 +    Respond(Error("No render frame"));
 +    return;
 +  }
-   
--  // Scale down proportionally if needed
--  if (thumbnail_size.width() > max_dimension || 
--      thumbnail_size.height() > max_dimension) {
--    float scale = std::min(
--        static_cast<float>(max_dimension) / thumbnail_size.width(),
--        static_cast<float>(max_dimension) / thumbnail_size.height());
--    thumbnail_size = gfx::ScaleToFlooredSize(thumbnail_size, scale);
++  
 +  content::RenderWidgetHost* rwh = rfh->GetRenderWidgetHost();
 +  if (!rwh) {
 +    Respond(Error("No render widget host"));
@@ -269,7 +292,7 @@ index 5242a1c3f930c..789218f333a04 100644
    if (bitmap.empty()) {
      Respond(Error("Failed to capture screenshot"));
      return;
-@@ -1011,5 +1127,140 @@ ExtensionFunction::ResponseAction BrowserOSGetVersionNumberFunction::Run() {
+@@ -1011,5 +1121,140 @@ ExtensionFunction::ResponseAction BrowserOSGetVersionNumberFunction::Run() {
        browser_os::GetVersionNumber::Results::Create(version)));
  }
  
@@ -411,7 +434,7 @@ index 5242a1c3f930c..789218f333a04 100644
  }  // namespace api
  }  // namespace extensions
 diff --git a/chrome/browser/extensions/api/browser_os/browser_os_api.h b/chrome/browser/extensions/api/browser_os/browser_os_api.h
-index 27721d9b0b9a0..c267a22c45ca8 100644
+index 27721d9b0b9a0..51ba01b900769 100644
 --- a/chrome/browser/extensions/api/browser_os/browser_os_api.h
 +++ b/chrome/browser/extensions/api/browser_os/browser_os_api.h
 @@ -7,6 +7,7 @@
@@ -422,17 +445,18 @@ index 27721d9b0b9a0..c267a22c45ca8 100644
  #include "base/values.h"
  #include "chrome/browser/extensions/api/browser_os/browser_os_api_utils.h"
  #include "chrome/browser/extensions/api/browser_os/browser_os_content_processor.h"
-@@ -68,6 +69,9 @@ class BrowserOSGetInteractiveSnapshotFunction : public ExtensionFunction {
+@@ -66,8 +67,8 @@ class BrowserOSGetInteractiveSnapshotFunction : public ExtensionFunction {
+   // Tab ID for storing mappings
+   int tab_id_ = -1;
    
-   // Viewport size for checking visibility
-   gfx::Size viewport_size_;
-+  
-+  // Web contents for drawing bounding boxes
+-  // Viewport size for checking visibility
+-  gfx::Size viewport_size_;
++  // Web contents for processing and drawing
 +  raw_ptr<content::WebContents> web_contents_ = nullptr;
  };
  
  class BrowserOSClickFunction : public ExtensionFunction {
-@@ -179,16 +183,25 @@ class BrowserOSCaptureScreenshotFunction : public ExtensionFunction {
+@@ -179,16 +180,25 @@ class BrowserOSCaptureScreenshotFunction : public ExtensionFunction {
   public:
    DECLARE_EXTENSION_FUNCTION("browserOS.captureScreenshot", BROWSER_OS_CAPTURESCREENSHOT)
  
@@ -460,7 +484,7 @@ index 27721d9b0b9a0..c267a22c45ca8 100644
  };
  
  class BrowserOSGetSnapshotFunction : public ExtensionFunction {
-@@ -275,6 +288,48 @@ class BrowserOSGetVersionNumberFunction : public ExtensionFunction {
+@@ -275,6 +285,48 @@ class BrowserOSGetVersionNumberFunction : public ExtensionFunction {
    ResponseAction Run() override;
  };
  
@@ -510,7 +534,7 @@ index 27721d9b0b9a0..c267a22c45ca8 100644
  }  // namespace extensions
  
 diff --git a/chrome/browser/extensions/api/browser_os/browser_os_api_helpers.cc b/chrome/browser/extensions/api/browser_os/browser_os_api_helpers.cc
-index d05a75dd626e9..ad9b5cabf9b4e 100644
+index d05a75dd626e9..b8555289c07f9 100644
 --- a/chrome/browser/extensions/api/browser_os/browser_os_api_helpers.cc
 +++ b/chrome/browser/extensions/api/browser_os/browser_os_api_helpers.cc
 @@ -5,6 +5,7 @@
@@ -521,7 +545,52 @@ index d05a75dd626e9..ad9b5cabf9b4e 100644
  #include "base/strings/utf_string_conversions.h"
  #include "base/task/sequenced_task_runner.h"
  #include "chrome/browser/extensions/api/browser_os/browser_os_api_utils.h"
-@@ -119,7 +120,7 @@ void VisualizeInteractionPoint(content::WebContents* web_contents,
+@@ -68,36 +69,18 @@ float CssToWidgetScale(content::WebContents* web_contents,
+   return zoom * css_zoom * page_scale;
+ }
+ 
+-// Helper function to get center point of a node's bounds in CSS pixels.
+-// On HiDPI (e.g., macOS Retina), normalize physical pixels by DSF so the
+-// returned point aligns with document CSS coordinates used for visualization.
++// Helper function to get center point of a node's bounds.
++// Bounds are already stored in CSS pixels from SnapshotProcessor,
++// so no DSF conversion is needed.
+ gfx::PointF GetNodeCenterPoint(content::WebContents* web_contents,
+                                const NodeInfo& node_info) {
+-  gfx::PointF center(node_info.bounds.x() + node_info.bounds.width() / 2.0f,
+-                     node_info.bounds.y() + node_info.bounds.height() / 2.0f);
+-
+-  if (!web_contents)
+-    return center;
+-
+-  content::RenderFrameHost* rfh = web_contents->GetPrimaryMainFrame();
+-  if (!rfh)
+-    return center;
+-  content::RenderWidgetHost* rwh = rfh->GetRenderWidgetHost();
+-  if (!rwh)
+-    return center;
+-  if (auto* view_any = rwh->GetView()) {
+-    if (auto* view_base =
+-            static_cast<content::RenderWidgetHostViewBase*>(view_any)) {
+-      const float dsf = view_base->GetDeviceScaleFactor();
+-      if (dsf > 0.0f && dsf != 1.0f) {
+-        center.set_x(center.x() / dsf);
+-        center.set_y(center.y() / dsf);
+-      }
+-    }
+-  }
+-  return center;
++  // Simple calculation - bounds are already in CSS pixels
++  return gfx::PointF(
++      node_info.bounds.x() + node_info.bounds.width() / 2.0f,
++      node_info.bounds.y() + node_info.bounds.height() / 2.0f);
+ }
+ 
++
+ // Helper function to visualize a human-like cursor click.
+ // Shows an orange cursor triangle with ripple effect that moves to the target.
+ // This uses CSS transitions/animations and cleans itself up automatically.
+@@ -119,7 +102,7 @@ void VisualizeInteractionPoint(content::WebContents* web_contents,
    const float start_y = point.y() - (sin(angle) * distance);
    
    // Build the JavaScript code using string concatenation to avoid format string issues
@@ -530,7 +599,74 @@ index d05a75dd626e9..ad9b5cabf9b4e 100644
        R"(
        (function() {
          var COLOR = '#FC661A';
-@@ -971,5 +972,272 @@ bool KeyPressWithDetection(content::WebContents* web_contents,
+@@ -262,7 +245,7 @@ void PointClick(content::WebContents* web_contents,
+   gfx::PointF widget_point(css_point.x() * scale, css_point.y() * scale);
+ 
+   // Visualize the actual target location on the page (CSS pixel coords).
+-  VisualizeInteractionPoint(web_contents, css_point, 2000, 50.0f);
++  // VisualizeInteractionPoint(web_contents, css_point, 2000, 50.0f);
+ 
+   // Create mouse down event
+   blink::WebMouseEvent mouse_down;
+@@ -794,10 +777,17 @@ bool ClickWithDetection(content::WebContents* web_contents,
+     base::PlatformThread::Sleep(base::Milliseconds(300));
+     
+     // For out-of-viewport nodes, use AccessibilityDoDefault first (most reliable after scroll)
+-    LOG(INFO) << "[browseros] Node was out of viewport, trying AccessibilityDoDefault click first";
++    // LOG(INFO) << "[browseros] Node was out of viewport, trying AccessibilityDoDefault click first";
++    // bool changed = BrowserOSChangeDetector::ExecuteWithDetection(
++    //     web_contents,
++    //     [&]() { AccessibilityDoDefault(web_contents, node_info); },
++    //     base::Milliseconds(300));
++    
++    gfx::PointF click_point = GetNodeCenterPoint(web_contents, node_info);
++    
+     bool changed = BrowserOSChangeDetector::ExecuteWithDetection(
+         web_contents,
+-        [&]() { AccessibilityDoDefault(web_contents, node_info); },
++        [&]() { PointClick(web_contents, click_point); },
+         base::Milliseconds(300));
+     
+     if (!changed) {
+@@ -900,15 +890,15 @@ bool TypeWithDetection(content::WebContents* web_contents,
+   }
+   
+   // If still no change, try accessibility SetValue as final fallback
+-  if (!changed) {
+-    LOG(INFO) << "[browseros] No change from JavaScript, trying accessibility SetValue";
+-    changed = BrowserOSChangeDetector::ExecuteWithDetection(
+-        web_contents,
+-        [&]() {
+-          AccessibilitySetValue(web_contents, node_info, text);
+-        },
+-        base::Milliseconds(300));
+-  }
++  // if (!changed) {
++  //   LOG(INFO) << "[browseros] No change from JavaScript, trying accessibility SetValue";
++  //   changed = BrowserOSChangeDetector::ExecuteWithDetection(
++  //       web_contents,
++  //       [&]() {
++  //         AccessibilitySetValue(web_contents, node_info, text);
++  //       },
++  //       base::Milliseconds(300));
++  // }
+   
+   LOG(INFO) << "[browseros] Type result: " << (changed ? "changed" : "no change");
+   return changed;
+@@ -918,10 +908,10 @@ bool TypeWithDetection(content::WebContents* web_contents,
+ bool ClearWithDetection(content::WebContents* web_contents,
+                        const NodeInfo& node_info) {
+   // Get center point for visualization
+-  gfx::PointF clear_point = GetNodeCenterPoint(web_contents, node_info);
++  // gfx::PointF clear_point = GetNodeCenterPoint(web_contents, node_info);
+   
+   // Visualize where we're about to clear (orange for clear)
+-  VisualizeInteractionPoint(web_contents, clear_point, 2000, 50.0f);
++  // VisualizeInteractionPoint(web_contents, clear_point, 2000, 50.0f);
+   
+   // Use change detection with JavaScript clear
+   bool changed = BrowserOSChangeDetector::ExecuteWithDetection(
+@@ -971,5 +961,273 @@ bool KeyPressWithDetection(content::WebContents* web_contents,
    return changed;
  }
  
@@ -603,6 +739,7 @@ index d05a75dd626e9..ad9b5cabf9b4e 100644
 +    if (!first) js_code += ",";
 +    first = false;
 +    
++    // Bounds are already in CSS pixels from SnapshotProcessor
 +    js_code += base::StringPrintf(
 +        R"(
 +        {
@@ -725,7 +862,7 @@ index d05a75dd626e9..ad9b5cabf9b4e 100644
 +      [&]() { 
 +        PointClick(web_contents, point);
 +        // Optionally visualize the click point
-+        VisualizeInteractionPoint(web_contents, point, 1500);
++        // VisualizeInteractionPoint(web_contents, point, 1500);
 +      },
 +      base::Milliseconds(300));
 +  
@@ -745,7 +882,7 @@ index d05a75dd626e9..ad9b5cabf9b4e 100644
 +  PointClick(web_contents, point);
 +  
 +  // Visualize the click point briefly
-+  VisualizeInteractionPoint(web_contents, point, 1000);
++  // VisualizeInteractionPoint(web_contents, point, 1000);
 +  
 +  // Wait a moment for focus to be established
 +  base::PlatformThread::Sleep(base::Milliseconds(100));
@@ -804,9 +941,20 @@ index d05a75dd626e9..ad9b5cabf9b4e 100644
  }  // namespace api
  }  // namespace extensions
 diff --git a/chrome/browser/extensions/api/browser_os/browser_os_api_helpers.h b/chrome/browser/extensions/api/browser_os/browser_os_api_helpers.h
-index b5fd204753973..d6f632bb46258 100644
+index b5fd204753973..434ddabfec46b 100644
 --- a/chrome/browser/extensions/api/browser_os/browser_os_api_helpers.h
 +++ b/chrome/browser/extensions/api/browser_os/browser_os_api_helpers.h
+@@ -28,8 +28,8 @@ struct NodeInfo;
+ float CssToWidgetScale(content::WebContents* web_contents,
+                        content::RenderWidgetHost* rwh);
+ 
+-// Returns the center point of a node's bounds in CSS pixels, normalized by
+-// device scale factor when necessary so it aligns with document coordinates.
++// Returns the center point of a node's bounds.
++// Bounds are already in CSS pixels from SnapshotProcessor.
+ gfx::PointF GetNodeCenterPoint(content::WebContents* web_contents,
+                                const NodeInfo& node_info);
+ 
 @@ -118,6 +118,27 @@ void VisualizeInteractionPoint(content::WebContents* web_contents,
                                 int duration_ms = 3000,
                                 float offset_range = 50.0f);
@@ -862,10 +1010,111 @@ index c632dc7a71585..f4fdcb73186cd 100644
  
  // Global node ID mappings storage
 diff --git a/chrome/browser/extensions/api/browser_os/browser_os_snapshot_processor.cc b/chrome/browser/extensions/api/browser_os/browser_os_snapshot_processor.cc
-index 8dfc0cce77512..7fe193dc6d527 100644
+index 8dfc0cce77512..885942336dcd6 100644
 --- a/chrome/browser/extensions/api/browser_os/browser_os_snapshot_processor.cc
 +++ b/chrome/browser/extensions/api/browser_os/browser_os_snapshot_processor.cc
-@@ -420,6 +420,10 @@ void SnapshotProcessor::OnBatchProcessed(
+@@ -24,6 +24,9 @@
+ #include "base/time/time.h"
+ #include "chrome/browser/extensions/api/browser_os/browser_os_api_utils.h"
+ #include "content/public/browser/browser_thread.h"
++#include "content/public/browser/render_widget_host_view.h"
++#include "content/browser/renderer_host/render_widget_host_view_base.h"
++#include "content/public/browser/web_contents.h"
+ #include "ui/accessibility/ax_clipping_behavior.h"
+ #include "ui/accessibility/ax_coordinate_system.h"
+ #include "ui/accessibility/ax_enum_util.h"
+@@ -40,16 +43,17 @@
+ namespace extensions {
+ namespace api {
+ 
+-// Static method to compute bounds for a node using AXTree
++// Static method to compute bounds for a node using AXTree and convert to CSS pixels
+ // This implements the same logic as BrowserAccessibility::GetBoundsRect
+-gfx::Rect SnapshotProcessor::GetNodeBounds(
++gfx::RectF SnapshotProcessor::GetNodeBounds(
+     ui::AXTree* tree,
+     const ui::AXNode* node,
+     const ui::AXCoordinateSystem coordinate_system,
+     const ui::AXClippingBehavior clipping_behavior,
++    float device_scale_factor,
+     bool* out_offscreen) {
+   if (!tree || !node) {
+-    return gfx::Rect();
++    return gfx::RectF();
+   }
+   
+   // Start with empty bounds (same as GetBoundsRect does)
+@@ -65,17 +69,16 @@ gfx::Rect SnapshotProcessor::GetNodeBounds(
+     *out_offscreen = offscreen;
+   }
+   
+-  // For frame coordinates, we're done
+-  // We use kFrame since we want viewport-relative coordinates
+-  if (coordinate_system == ui::AXCoordinateSystem::kFrame) {
+-    return gfx::ToEnclosingRect(bounds);
++  // Convert physical pixels to CSS pixels
++  if (device_scale_factor > 0.0f && device_scale_factor != 1.0f) {
++    bounds.set_x(bounds.x() / device_scale_factor);
++    bounds.set_y(bounds.y() / device_scale_factor);
++    bounds.set_width(bounds.width() / device_scale_factor);
++    bounds.set_height(bounds.height() / device_scale_factor);
+   }
+   
+-  // For root frame or screen coordinates, additional transformations would be needed
+-  // but for our use case (click coordinates), frame coordinates are what we need
+-  // since ForwardMouseEvent expects viewport-relative coordinates
+-  
+-  return gfx::ToEnclosingRect(bounds);
++  // Return bounds in CSS pixels
++  return bounds;
+ }
+ 
+ 
+@@ -139,6 +142,8 @@ struct SnapshotProcessor::ProcessingContext
+   std::unique_ptr<ui::AXTree> ax_tree;  // AXTree for computing accurate bounds
+   int tab_id;
+   ui::AXTreeID tree_id;  // Tree ID for change detection
++  float device_scale_factor = 1.0f;  // For converting physical to CSS pixels
++  gfx::Size viewport_size;  // For visibility checks
+   base::TimeTicks start_time;
+   size_t total_nodes;
+   size_t processed_batches;
+@@ -317,7 +322,8 @@ std::vector<SnapshotProcessor::ProcessedNode> SnapshotProcessor::ProcessNodeBatc
+     const std::vector<ui::AXNodeData>& nodes_to_process,
+     const std::unordered_map<int32_t, ui::AXNodeData>& node_map,
+     ui::AXTree* ax_tree,
+-    uint32_t start_node_id) {
++    uint32_t start_node_id,
++    float device_scale_factor) {
+   std::vector<ProcessedNode> results;
+   results.reserve(nodes_to_process.size());
+   
+@@ -353,8 +359,8 @@ std::vector<SnapshotProcessor::ProcessedNode> SnapshotProcessor::ProcessNodeBatc
+     if (ax_tree) {
+       ui::AXNode* ax_node = ax_tree->GetFromId(node_data.id);
+       if (ax_node) {
+-        // Get bounds in frame coordinates (viewport-relative CSS pixels)
+-        gfx::Rect bounds = GetNodeBounds(
++        // GetNodeBounds now returns CSS pixels directly
++        data.absolute_bounds = GetNodeBounds(
+             ax_tree, 
+             ax_node,
+             ui::AXCoordinateSystem::kFrame,
+@@ -362,11 +368,11 @@ std::vector<SnapshotProcessor::ProcessedNode> SnapshotProcessor::ProcessNodeBatc
+             // scrolled/clip containers. This matches how clicks should target
+             // on-screen rects.
+             ui::AXClippingBehavior::kClipped,
++            device_scale_factor,  // Pass DSF for CSS pixel conversion
+             &is_offscreen);
+-        data.absolute_bounds = gfx::RectF(bounds);
+         
+         VLOG(3) << "[browseros] Node " << node_data.id 
+-                << " computed bounds: " << bounds.ToString()
++                << " CSS bounds: " << data.absolute_bounds.ToString()
+                 << " offscreen: " << is_offscreen;
+       } else {
+         // Node not found in AXTree, skip bounds computation
+@@ -420,6 +426,10 @@ void SnapshotProcessor::OnBatchProcessed(
      info.ax_tree_id = context->tree_id;  // Store tree ID for change detection
      info.bounds = node_data.absolute_bounds;
      info.attributes = node_data.attributes;  // Store all computed attributes
@@ -876,6 +1125,131 @@ index 8dfc0cce77512..7fe193dc6d527 100644
      GetNodeIdMappings()[context->tab_id][node_data.node_id] = info;
      
      // Log the mapping for debugging
+@@ -490,14 +500,41 @@ void SnapshotProcessor::OnBatchProcessed(
+ }
+ 
+ // Main processing function
++// Helper function to extract viewport info from WebContents
++// Returns viewport size and device scale factor
++static std::pair<gfx::Size, float> ExtractViewportInfo(
++    content::WebContents* web_contents) {
++  gfx::Size viewport_size;
++  float device_scale_factor = 1.0f;
++  
++  if (web_contents) {
++    if (auto* rwhv = web_contents->GetRenderWidgetHostView()) {
++      viewport_size = rwhv->GetVisibleViewportSize();
++      
++      // Get device scale factor for CSS pixel conversion
++      if (auto* rwhv_base = 
++          static_cast<content::RenderWidgetHostViewBase*>(rwhv)) {
++        device_scale_factor = rwhv_base->GetDeviceScaleFactor();
++      }
++    }
++  }
++  
++  LOG(INFO) << "[browseros] Viewport: " << viewport_size.ToString() 
++            << ", DSF: " << device_scale_factor;
++  
++  return {viewport_size, device_scale_factor};
++}
++
+ void SnapshotProcessor::ProcessAccessibilityTree(
+     const ui::AXTreeUpdate& tree_update,
+     int tab_id,
+     uint32_t snapshot_id,
+-    const gfx::Size& viewport_size,
++    content::WebContents* web_contents,
+     base::OnceCallback<void(SnapshotProcessingResult)> callback) {
+   base::TimeTicks start_time = base::TimeTicks::Now();
+   
++  // Extract viewport info from WebContents on UI thread
++  auto [viewport_size, device_scale_factor] = ExtractViewportInfo(web_contents);
+   
+   // Build node ID map, parent map and children map for efficient lookup
+   std::unordered_map<int32_t, ui::AXNodeData> node_map;
+@@ -540,6 +577,8 @@ void SnapshotProcessor::ProcessAccessibilityTree(
+   context->parent_map = std::move(parent_map); 
+   context->children_map = std::move(children_map);
+   context->ax_tree = std::move(ax_tree);  // Store AXTree for bounds computation
++  context->device_scale_factor = device_scale_factor;  // For CSS pixel conversion
++  context->viewport_size = viewport_size;  // For visibility checks
+   context->start_time = start_time;
+   
+   // Store the tree ID for change detection
+@@ -597,7 +636,8 @@ void SnapshotProcessor::ProcessAccessibilityTree(
+                        std::move(batch), 
+                        context->node_map,
+                        context->ax_tree.get(),  // Pass AXTree pointer for bounds computation
+-                       start_node_id),
++                       start_node_id,
++                       context->device_scale_factor),  // Pass DSF for CSS pixel conversion
+         base::BindOnce(&SnapshotProcessor::OnBatchProcessed,
+                        context));
+   }
+diff --git a/chrome/browser/extensions/api/browser_os/browser_os_snapshot_processor.h b/chrome/browser/extensions/api/browser_os/browser_os_snapshot_processor.h
+index 2c14673b4d1c1..5c85cd73b26f3 100644
+--- a/chrome/browser/extensions/api/browser_os/browser_os_snapshot_processor.h
++++ b/chrome/browser/extensions/api/browser_os/browser_os_snapshot_processor.h
+@@ -15,6 +15,10 @@
+ #include "chrome/common/extensions/api/browser_os.h"
+ #include "ui/gfx/geometry/rect_f.h"
+ 
++namespace content {
++class WebContents;
++}  // namespace content
++
+ namespace ui {
+ class AXNode;
+ class AXTree;
+@@ -60,33 +64,38 @@ class SnapshotProcessor {
+ 
+   // Main processing function - handles all threading internally
+   // This function processes the accessibility tree into an interactive snapshot
+-  // using parallel processing on the thread pool.
++  // using parallel processing on the thread pool. Extracts viewport info from
++  // web_contents on UI thread before processing.
+   static void ProcessAccessibilityTree(
+       const ui::AXTreeUpdate& tree_update,
+       int tab_id,
+       uint32_t snapshot_id,
+-      const gfx::Size& viewport_size,
++      content::WebContents* web_contents,
+       base::OnceCallback<void(SnapshotProcessingResult)> callback);
+ 
+   // Process a batch of nodes (exposed for testing)
+   // The ax_tree is used to compute accurate bounds for each node
++  // device_scale_factor is used to convert physical pixels to CSS pixels
+   static std::vector<ProcessedNode> ProcessNodeBatch(
+       const std::vector<ui::AXNodeData>& nodes_to_process,
+       const std::unordered_map<int32_t, ui::AXNodeData>& node_map,
+       ui::AXTree* ax_tree,
+-      uint32_t start_node_id);
++      uint32_t start_node_id,
++      float device_scale_factor = 1.0f);
+ 
+  private:
+   // Internal processing context
+   struct ProcessingContext;
+   
+-  // Compute absolute bounds for a node using AXTree
++  // Compute absolute bounds for a node using AXTree and convert to CSS pixels
+   // This implements the same logic as BrowserAccessibility::GetBoundsRect
+-  static gfx::Rect GetNodeBounds(ui::AXTree* tree, 
+-                                  const ui::AXNode* node,
+-                                  const ui::AXCoordinateSystem coordinate_system,
+-                                  const ui::AXClippingBehavior clipping_behavior,
+-                                  bool* out_offscreen = nullptr);
++  // Returns bounds in CSS pixels by applying device_scale_factor
++  static gfx::RectF GetNodeBounds(ui::AXTree* tree, 
++                                   const ui::AXNode* node,
++                                   const ui::AXCoordinateSystem coordinate_system,
++                                   const ui::AXClippingBehavior clipping_behavior,
++                                   float device_scale_factor = 1.0f,
++                                   bool* out_offscreen = nullptr);
+   
+   // Batch processing callback
+   static void OnBatchProcessed(scoped_refptr<ProcessingContext> context,
 diff --git a/chrome/browser/extensions/chrome_extensions_browser_api_provider.cc b/chrome/browser/extensions/chrome_extensions_browser_api_provider.cc
 index 6b3227c786686..3666bf5a0d2c8 100644
 --- a/chrome/browser/extensions/chrome_extensions_browser_api_provider.cc
