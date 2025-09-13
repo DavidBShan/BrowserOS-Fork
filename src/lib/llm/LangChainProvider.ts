@@ -19,15 +19,15 @@ import { BrowserOSProvider } from '@/lib/llm/settings/browserOSTypes'
 import { Logging } from '@/lib/utils/Logging'
 
 // Default constants
-const DEFAULT_TEMPERATURE = 0.7
+const DEFAULT_TEMPERATURE = 0.2
 const DEFAULT_STREAMING = true
 const DEFAULT_MAX_TOKENS = 4096
 const DEFAULT_OPENAI_MODEL = "gpt-4o"
 const DEFAULT_ANTHROPIC_MODEL = 'claude-4-sonnet'
 const DEFAULT_OLLAMA_MODEL = "qwen3:4b"
 const DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434"
-const DEFAULT_NXTSCAPE_PROXY_URL = "https://llm.browseros.com/default/"
-const DEFAULT_NXTSCAPE_MODEL = "default-llm"
+const DEFAULT_BROWSEROS_PROXY_URL = "https://llm.browseros.com/default/"
+const DEFAULT_BROWSEROS_MODEL = "default-llm"
 const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
 
 
@@ -165,7 +165,7 @@ export class LangChainProvider {
   private _getDefaultModelForProvider(type: string): string {
     switch (type) {
       case 'browseros':
-        return DEFAULT_NXTSCAPE_MODEL
+        return DEFAULT_BROWSEROS_MODEL
       case 'openai':
       case 'openai_compatible':
       case 'openrouter':
@@ -337,13 +337,13 @@ export class LangChainProvider {
     streaming: boolean = true
   ): ChatOpenAI {
     const model = new ChatOpenAI({
-      modelName: DEFAULT_NXTSCAPE_MODEL,
+      modelName: DEFAULT_BROWSEROS_MODEL,
       temperature,
       maxTokens,
       streaming,
       openAIApiKey: 'nokey',
       configuration: {
-        baseURL: DEFAULT_NXTSCAPE_PROXY_URL,
+        baseURL: DEFAULT_BROWSEROS_PROXY_URL,
         apiKey: 'nokey',
         dangerouslyAllowBrowser: true
       }
