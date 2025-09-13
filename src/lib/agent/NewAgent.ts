@@ -2,6 +2,7 @@ import { ExecutionContext } from "@/lib/runtime/ExecutionContext";
 import { MessageManager, MessageManagerReadOnly, MessageType } from "@/lib/runtime/MessageManager";
 import { ToolManager } from "@/lib/tools/ToolManager";
 import { ExecutionMetadata } from "@/lib/types/messaging";
+import { type ScreenshotSizeKey } from "@/lib/browser/BrowserOSAdapter";
 import {
   AIMessage,
   AIMessageChunk,
@@ -539,6 +540,7 @@ export class NewAgent {
   private async _getBrowserStateMessage(
     includeScreenshot: boolean,
     simplified: boolean = true,
+    screenshotSize: ScreenshotSizeKey = "large",
   ): Promise<HumanMessage> {
     // Get browser state string
     const browserStateString =
@@ -549,7 +551,7 @@ export class NewAgent {
     if (includeScreenshot && this.executionContext.supportsVision()) {
       // Get current page and take screenshot
       const page = await this.executionContext.browserContext.getCurrentPage();
-      const screenshot = await page.takeScreenshot("large", true);
+      const screenshot = await page.takeScreenshot(screenshotSize, true);
 
       if (screenshot) {
         // Return multimodal message with state + screenshot, properly tagged as browser state
@@ -576,7 +578,11 @@ export class NewAgent {
       this.executionContext.incrementMetric("observations");
 
       // Get browser state message with screenshot
-      const browserStateMessage = await this._getBrowserStateMessage(true, true);
+      const browserStateMessage = await this._getBrowserStateMessage(
+        /* includeScreenshot */ true,
+        /* simplified */ true,
+        /* screenshotSize */ "large"
+      );
 
       // Get execution metrics for analysis
       const metrics = this.executionContext.getExecutionMetrics();
@@ -692,8 +698,12 @@ Based on the metrics, execution history, and current browser state, what should 
 
       // Add browser state and simple prompt
       if (isFirstPass) {
-        // Add current browser state with screenshot
-        const browserStateMessage = await this._getBrowserStateMessage(false, false);
+        // Add current browser state without screenshot
+        const browserStateMessage = await this._getBrowserStateMessage(
+          /* includeScreenshot */ true,
+          /* simplified */ false,
+          /* screenshotSize */ "medium"
+        );
         // remove old state and screenshot messages first
         this.executorMessageManager.removeMessagesByType(MessageType.BROWSER_STATE);
         this.executorMessageManager.removeMessagesByType(MessageType.SCREENSHOT);
@@ -1113,7 +1123,11 @@ Based on the metrics, execution history, and current browser state, what should 
       this.executionContext.incrementMetric("observations");
 
       // Get browser state with screenshot
-      const browserStateMessage = await this._getBrowserStateMessage(true, true);
+      const browserStateMessage = await this._getBrowserStateMessage(
+        /* includeScreenshot */ true,
+        /* simplified */ true,
+        /* screenshotSize */ "large"
+      );
 
       // Get execution metrics for analysis
       const metrics = this.executionContext.getExecutionMetrics();
