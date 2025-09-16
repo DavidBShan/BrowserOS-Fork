@@ -25,63 +25,16 @@ interface MessageListProps {
   containerRef?: React.RefObject<HTMLDivElement>
 }
 
-// Example prompts grouped by category
-const ALL_EXAMPLES = [
-  // Tab Management
-  "Group my tabs by app or purpose",
-  "Find tabs related to machine learning",
-  // "Close tabs I haven't touched in 7 days",
-  "Highlight the tab where I was last shopping",
-  "Save all Facebook tabs to a reading list",
-  // "Pin tabs I use daily",
-  // "Archive tabs from last week's research",
-  // "Reopen the tab I accidentally closed",
-  // "Mute all tabs except the one playing music",
-
-  // Page Analysis
-  "Summarize this article for me",
-  "What are the key points on this page?",
-  // "Check if this article is AI-generated",
-  "Extract all links and sources from this page",
-  "Extract all news headlines from this page",
-  // "List all images and their alt text",
-  // "Detect the reading level of this article",
-  // "Highlight quotes or cited studies",
-  // "Compare this page to another tab I'm viewing",
-
-  // Search & Discovery
-  "Find top-rated headphones under $100",
-  // "Find the cheapest flight to San Francisco",
-  "Search YouTube for videos explaining BrowserOS",
-  // "Look up reviews for this product",
-  "Search Reddit for discussions about this topic",
-  // "Find recipes using the ingredients in my tabs",
-  // "Show me recent news about this company",
-  // "Search for open-source alternatives to this tool",
-
-  // Actions & Automation
+// Example prompts - showcasing BrowserOS capabilities
+const EXAMPLES = [
   "Open amazon.com and order Sensodyne toothpaste",
-  "Write a tweet saying Hello World",
-  // "Add this page to my bookmarks",
-  // "Download the PDF linked on this page",
-  // "Translate this page to Spanish",
-  // "Email this article to myself",
-  // "Create a calendar event based on this page",
-  // "Copy all code snippets from this tab",
-
-  // AI & Content Tools
-  // "Rewrite this paragraph to be more concise",
-  "Generate a summary tweet for this article",
-  // "Explain this code like I'm five",
-  // "Draft a reply to this comment",
-  "Rate the tone of this blog post",
-  // "Suggest improvements to this documentation",
+  "Find top-rated headphones under $100", 
+  "Go to GitHub and Star BrowserOS",
   "Turn this article into a LinkedIn post",
-  // "Detect bias or opinionated language in this page",
 ]
 
 // Animation constants  
-const DEFAULT_DISPLAY_COUNT = 5 // Default number of examples to show
+const DEFAULT_DISPLAY_COUNT = 4 // Fixed number of examples to show
 
 /**
  * MessageList component
@@ -91,10 +44,9 @@ export function MessageList({ messages, isProcessing = false, onScrollStateChang
   const { containerRef: internalContainerRef, isUserScrolling, scrollToBottom } = useAutoScroll<HTMLDivElement>([messages], externalContainerRef)
   const { trackFeature } = useAnalytics()
   const [, setIsAtBottom] = useState(true)
-  const [currentExamples, setCurrentExamples] = useState<string[]>([])
-  const [shuffledPool, setShuffledPool] = useState<string[]>([])
+  const [currentExamples] = useState<string[]>(EXAMPLES)
   const [isAnimating] = useState(false)
-  const [displayCount, setDisplayCount] = useState(DEFAULT_DISPLAY_COUNT)
+  const [displayCount] = useState(DEFAULT_DISPLAY_COUNT)
   
   // Track previously seen message IDs to determine which are new
   const previousMessageIdsRef = useRef<Set<string>>(new Set())
@@ -103,19 +55,8 @@ export function MessageList({ messages, isProcessing = false, onScrollStateChang
   // Use external container ref if provided, otherwise use internal one
   const containerRef = externalContainerRef || internalContainerRef
   
-  // Adjust display count based on viewport height
-  useEffect(() => {
-    const updateDisplayCount = () => {
-      const height = window.innerHeight
-      setDisplayCount(height < 700 ? 3 : DEFAULT_DISPLAY_COUNT)
-    }
-    
-    updateDisplayCount()
-    window.addEventListener('resize', updateDisplayCount)
-    return () => window.removeEventListener('resize', updateDisplayCount)
-  }, [])
 
-  // Track new messages for animation
+  // Track new messages for animation 
   useEffect(() => {
     const currentMessageIds = new Set(messages.map(msg => msg.msgId))
     const previousIds = previousMessageIdsRef.current
@@ -208,55 +149,6 @@ export function MessageList({ messages, isProcessing = false, onScrollStateChang
     return blocks
   }, [messages])
 
-  // Initialize shuffled pool and current examples
-  useEffect(() => {
-    const shuffled = [...ALL_EXAMPLES].sort(() => 0.5 - Math.random())
-    setShuffledPool(shuffled)
-    
-    // Get initial examples based on display count
-    const initialExamples: string[] = []
-    for (let i = 0; i < displayCount; i++) {
-      if (shuffled.length > 0) {
-        initialExamples.push(shuffled.pop()!)
-      }
-    }
-    setCurrentExamples(initialExamples)
-  }, [displayCount])
-
-  // Function to get random examples from pool
-  const _getRandomExample = useCallback((count: number = 1): string[] => {
-    const result: string[] = []
-    let pool = [...shuffledPool]
-
-    while (result.length < count) {
-      // If exhausted, reshuffle
-      if (pool.length === 0) {
-        pool = [...ALL_EXAMPLES].sort(() => 0.5 - Math.random())
-      }
-      result.push(pool.pop()!)
-    }
-
-    // Update the pool
-    setShuffledPool(pool)
-    return result
-  }, [shuffledPool])
-
-  // Refresh examples only when the welcome view is shown (on mount or when messages become empty)
-  const wasEmptyRef = useRef<boolean>(messages.length === 0)
-  useEffect(() => {
-    const isEmpty = messages.length === 0
-    if (isEmpty && !wasEmptyRef.current) {
-      // Reinitialize examples when transitioning back to empty state
-      const shuffled = [...ALL_EXAMPLES].sort(() => 0.5 - Math.random())
-      setShuffledPool(shuffled)
-      const initialExamples: string[] = []
-      for (let i = 0; i < displayCount; i++) {
-        if (shuffled.length > 0) initialExamples.push(shuffled.pop()!)
-      }
-      setCurrentExamples(initialExamples)
-    }
-    wasEmptyRef.current = isEmpty
-  }, [messages.length, displayCount])
 
   // Check if we're at the bottom of the scroll container
   useEffect(() => {
