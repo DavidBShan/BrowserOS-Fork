@@ -250,7 +250,6 @@ def apply_all_patches(
     commit_each: bool = False,
     dry_run: bool = False,
     interactive: bool = False,
-    use_chromium_files: bool = False,
 ) -> Tuple[int, List[str]]:
     """Apply all patches from patches directory.
 
@@ -259,16 +258,11 @@ def apply_all_patches(
         commit_each: Create a commit after each patch
         dry_run: Only check if patches would apply
         interactive: Ask for confirmation before each patch
-        use_chromium_files: Use chromium_files dir instead of dev patches dir
 
     Returns:
         Tuple of (applied_count, failed_list)
     """
-    # Get appropriate patches directory
-    if use_chromium_files:
-        patches_dir = build_ctx.get_chromium_files_dir()
-    else:
-        patches_dir = build_ctx.get_dev_patches_dir()
+    patches_dir = build_ctx.get_dev_patches_dir()
 
     if not patches_dir.exists():
         log_warning(f"Patches directory does not exist: {patches_dir}")
@@ -448,4 +442,3 @@ def apply_feature(ctx, feature_name, commit_each, dry_run):
     # Exit with error code if any patches failed
     if failed:
         ctx.exit(1)
-

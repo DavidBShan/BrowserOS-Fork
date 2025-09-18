@@ -44,13 +44,11 @@ def apply_patches_with_dev_cli(
     from modules.dev_cli.apply import apply_all_patches
 
     # Call the dev CLI function directly
-    # use_chromium_files=True tells it to use chromium_files/ directory
     applied, failed = apply_all_patches(
         build_ctx=ctx,
         commit_each=commit_each,
         dry_run=False,
         interactive=interactive,
-        use_chromium_files=True,  # Use chromium_files/ instead of chromium_src/
     )
 
     # Handle results
