@@ -11,15 +11,15 @@ from utils import log_info, log_success, log_error, log_warning
 
 
 def replace_chromium_files(ctx: BuildContext, replacements=None) -> bool:
-    """Replace files in chromium source with custom files from root_dir/chromium_src"""
+    """Replace files in chromium source with custom files from chromium_files directory"""
     log_info("\n🔄 Replacing chromium files...")
     log_info(f"  Build type: {ctx.build_type}")
 
     # Source directory containing replacement files
-    replacement_dir = ctx.root_dir / "chromium_src"
+    replacement_dir = ctx.get_chromium_files_dir()
 
     if not replacement_dir.exists():
-        log_info(f"⚠️  No chromium_src directory found at: {replacement_dir}")
+        log_info(f"⚠️  No chromium_files directory found at: {replacement_dir}")
         return True
 
     replaced_count = 0
@@ -91,9 +91,11 @@ def add_file_to_replacements(file_path: Path, chromium_src: Path, root_dir: Path
     except ValueError:
         log_error(f"File {file_path} is not within chromium source directory {chromium_src}")
         return False
-    
+
     # Create destination path
-    replacement_dir = root_dir / "chromium_src"
+    from context import BuildContext
+    ctx = BuildContext(root_dir=root_dir)
+    replacement_dir = ctx.get_chromium_files_dir()
     dest_file = replacement_dir / relative_path
     
     log_info(f"📂 Adding file to replacements:")
@@ -107,7 +109,7 @@ def add_file_to_replacements(file_path: Path, chromium_src: Path, root_dir: Path
         # Copy the file
         shutil.copy2(file_path, dest_file)
         
-        log_success(f"✓ File added to chromium_src replacements: {relative_path}")
+        log_success(f"✓ File added to chromium_files replacements: {relative_path}")
         log_info(f"  This file will be replaced during builds with --chromium-replace flag")
         return True
     except Exception as e:

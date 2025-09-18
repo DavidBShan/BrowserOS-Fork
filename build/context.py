@@ -245,6 +245,10 @@ class BuildContext:
         """Get individual patches directory (chromium_src/)"""
         return join_paths(self.root_dir, "chromium_src")
 
+    def get_chromium_files_dir(self) -> Path:
+        """Get chromium files replacement directory"""
+        return join_paths(self.root_dir, "chromium_files")
+
     def get_features_yaml_path(self) -> Path:
         """Get features.yaml file path"""
         return join_paths(self.root_dir, "features.yaml")
