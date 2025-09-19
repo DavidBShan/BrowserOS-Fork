@@ -57,20 +57,22 @@ export class ElementFormatter {
    * Format a single element
    */
   formatElement(node: InteractiveNode): string {
-    const SHOW_INDENTATION = true;
-    const SHOW_NODEID = true;
-    const SHOW_TYPE = true;
-    const SHOW_TAG = true;
-    const SHOW_NAME = true;
+    let SHOW_INDENTATION = true;
+    let SHOW_NODEID = true;
+    let SHOW_TYPE = true;
+    let SHOW_TAG = true;
+    let SHOW_NAME = true;
     let SHOW_CONTEXT = true;
-    const SHOW_PATH = false;
-    const SHOW_ATTRIBUTES = false;
-    const SHOW_VALUE_FOR_TYPEABLE = true; // Show value attribute for typeable elements
-    let APPEND_VIEWPORT_STATUS = false; // Append (visible)/(hidden) to indicate viewport status
-    const INDENT_SIZE = 2;
+    let SHOW_PATH = false;
+    let SHOW_ATTRIBUTES = true;
+    let SHOW_VALUE_FOR_TYPEABLE = true; // Show value attribute for typeable elements
+    let APPEND_VIEWPORT_STATUS = true; // Append (visible)/(hidden) to indicate viewport status
+    let INDENT_SIZE = 2;
     if (this.simplified) {
       SHOW_CONTEXT = false;
-      APPEND_VIEWPORT_STATUS = true;
+      SHOW_ATTRIBUTES = false;
+      SHOW_PATH = false;
+      SHOW_INDENTATION = false;
     } 
     const parts: string[] = [];
 
