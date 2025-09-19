@@ -1,9 +1,9 @@
 diff --git a/chrome/browser/ui/views/side_panel/third_party_llm/third_party_llm_panel_coordinator.cc b/chrome/browser/ui/views/side_panel/third_party_llm/third_party_llm_panel_coordinator.cc
 new file mode 100644
-index 0000000000000..e0118e58a9990
+index 0000000000000..65d7bfc9181fe
 --- /dev/null
 +++ b/chrome/browser/ui/views/side_panel/third_party_llm/third_party_llm_panel_coordinator.cc
-@@ -0,0 +1,1078 @@
+@@ -0,0 +1,1177 @@
 +// Copyright 2024 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -68,7 +68,9 @@ index 0000000000000..e0118e58a9990
 +#include "ui/gfx/codec/png_codec.h"
 +#include "ui/gfx/image/image.h"
 +#include "chrome/browser/file_select_helper.h"
++#include "chrome/browser/media/webrtc/media_capture_devices_dispatcher.h"
 +#include "content/public/browser/file_select_listener.h"
++#include "third_party/blink/public/common/mediastream/media_stream_request.h"
 +#include "content/public/browser/render_frame_host.h"
 +#include "components/metrics/browseros_metrics/browseros_metrics.h"
 +
@@ -803,6 +805,103 @@ index 0000000000000..e0118e58a9990
 +    const blink::mojom::FileChooserParams& params) {
 +  // Use FileSelectHelper to handle file selection, same as regular browser tabs
 +  FileSelectHelper::RunFileChooser(render_frame_host, std::move(listener), params);
++}
++
++void ThirdPartyLlmPanelCoordinator::RequestMediaAccessPermission(
++    content::WebContents* web_contents,
++    const content::MediaStreamRequest& request,
++    content::MediaResponseCallback callback) {
++  LOG(INFO) << "[browseros] Media access requested for origin: "
++            << request.url_origin.Serialize()
++            << " audio: " << (request.audio_type !=
++                blink::mojom::MediaStreamType::NO_SERVICE)
++            << " video: " << (request.video_type !=
++                blink::mojom::MediaStreamType::NO_SERVICE);
++
++  // Check if this is one of our known LLM providers by comparing against all providers
++  const GURL origin_url = request.url_origin.GetURL();
++  bool is_known_llm = false;
++
++  // Check all LLM providers
++  for (int i = 0; i <= static_cast<int>(LlmProvider::kPerplexity); ++i) {
++    LlmProvider provider = static_cast<LlmProvider>(i);
++    GURL provider_url = GetProviderUrl(provider);
++    if (origin_url.host() == provider_url.host()) {
++      is_known_llm = true;
++      break;
++    }
++  }
++
++  if (is_known_llm) {
++    // Auto-grant permission for known LLM sites in the side panel
++    // This is safe because:
++    // 1. These are reputable sites
++    // 2. User explicitly opened them in the LLM panel
++    // 3. Voice input is expected functionality
++
++    LOG(INFO) << "[browseros] Auto-granting media permission for trusted LLM: "
++              << origin_url.host();
++
++    // Get available audio devices
++    const blink::MediaStreamDevices& audio_devices =
++        MediaCaptureDevicesDispatcher::GetInstance()->GetAudioCaptureDevices();
++
++    // Create response with the default audio device
++    blink::mojom::StreamDevicesSetPtr stream_devices_set =
++        blink::mojom::StreamDevicesSet::New();
++
++    if (request.audio_type != blink::mojom::MediaStreamType::NO_SERVICE &&
++        !audio_devices.empty()) {
++      blink::mojom::StreamDevicesPtr devices = blink::mojom::StreamDevices::New();
++      devices->audio_device = audio_devices.front();
++      stream_devices_set->stream_devices.push_back(std::move(devices));
++    }
++
++    // Return success with granted devices
++    std::move(callback).Run(
++        *stream_devices_set,
++        blink::mojom::MediaStreamRequestResult::OK,
++        std::unique_ptr<content::MediaStreamUI>());
++  } else {
++    // For non-LLM sites, try the normal permission flow
++    // (though it may not show UI in side panel context)
++    MediaCaptureDevicesDispatcher::GetInstance()->ProcessMediaAccessRequest(
++        web_contents, request, std::move(callback), /*extension=*/nullptr);
++  }
++}
++
++bool ThirdPartyLlmPanelCoordinator::CheckMediaAccessPermission(
++    content::RenderFrameHost* render_frame_host,
++    const url::Origin& security_origin,
++    blink::mojom::MediaStreamType type) {
++  // Check if this is a trusted LLM site using our existing provider list
++  const GURL origin_url = security_origin.GetURL();
++
++  // Check all LLM providers
++  for (int i = 0; i <= static_cast<int>(LlmProvider::kPerplexity); ++i) {
++    LlmProvider provider = static_cast<LlmProvider>(i);
++    GURL provider_url = GetProviderUrl(provider);
++    if (origin_url.host() == provider_url.host()) {
++      // Auto-grant permission check for trusted LLM sites
++      VLOG(2) << "[browseros] Media permission check for trusted LLM origin: "
++              << security_origin.Serialize()
++              << " type: " << static_cast<int>(type)
++              << " result: true (auto-granted)";
++      return true;
++    }
++  }
++
++  // For non-LLM sites, check Chrome's stored permissions
++  bool has_permission = MediaCaptureDevicesDispatcher::GetInstance()
++      ->CheckMediaAccessPermission(render_frame_host, security_origin,
++                                   type, /*extension=*/nullptr);
++
++  VLOG(2) << "[browseros] Media permission check for origin: "
++          << security_origin.Serialize()
++          << " type: " << static_cast<int>(type)
++          << " result: " << has_permission;
++
++  return has_permission;
 +}
 +
 +void ThirdPartyLlmPanelCoordinator::CycleProvider() {

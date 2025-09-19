@@ -1,9 +1,9 @@
 diff --git a/chrome/browser/ui/views/side_panel/third_party_llm/third_party_llm_panel_coordinator.h b/chrome/browser/ui/views/side_panel/third_party_llm/third_party_llm_panel_coordinator.h
 new file mode 100644
-index 0000000000000..e781a56b451c9
+index 0000000000000..8a772310b3c73
 --- /dev/null
 +++ b/chrome/browser/ui/views/side_panel/third_party_llm/third_party_llm_panel_coordinator.h
-@@ -0,0 +1,223 @@
+@@ -0,0 +1,233 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -22,9 +22,11 @@ index 0000000000000..e781a56b451c9
 +#include "chrome/browser/ui/browser_user_data.h"
 +#include "chrome/browser/profiles/profile_observer.h"
 +#include "components/prefs/pref_change_registrar.h"
++#include "content/public/browser/media_stream_request.h"
 +#include "content/public/browser/web_contents_delegate.h"
 +#include "content/public/browser/web_contents_observer.h"
 +#include "third_party/blink/public/mojom/choosers/file_chooser.mojom.h"
++#include "third_party/blink/public/mojom/mediastream/media_stream.mojom.h"
 +#include "third_party/blink/public/mojom/window_features/window_features.mojom.h"
 +#include "ui/accessibility/ax_node_id_forward.h"
 +#include "ui/base/window_open_disposition.h"
@@ -109,6 +111,14 @@ index 0000000000000..e781a56b451c9
 +  void RunFileChooser(content::RenderFrameHost* render_frame_host,
 +                      scoped_refptr<content::FileSelectListener> listener,
 +                      const blink::mojom::FileChooserParams& params) override;
++  void RequestMediaAccessPermission(
++      content::WebContents* web_contents,
++      const content::MediaStreamRequest& request,
++      content::MediaResponseCallback callback) override;
++  bool CheckMediaAccessPermission(
++      content::RenderFrameHost* render_frame_host,
++      const url::Origin& security_origin,
++      blink::mojom::MediaStreamType type) override;
 +  
 +  // content::WebContentsObserver:
 +  void DidFinishLoad(content::RenderFrameHost* render_frame_host,
