@@ -65,6 +65,7 @@ import { createStorageTool } from '@/lib/tools/utils/StorageTool';
 import { createExtractTool } from '@/lib/tools/extraction/ExtractTool';
 import { createResultTool } from '@/lib/tools/result/ResultTool';
 import { createHumanInputTool } from '@/lib/tools/utils/HumanInputTool';
+import { createCelebrationTool } from '@/lib/tools/utils/CelebrationTool';
 import { createDateTool } from '@/lib/tools/utility/DateTool';
 import { createMCPTool } from '@/lib/tools/mcp/MCPTool';
 import { generateSystemPrompt, generateSingleTurnExecutionPrompt } from './BrowserAgent.prompt';
@@ -172,21 +173,41 @@ export class BrowserAgent {
   }
 
   /**
+   * Transform special example tasks into explicit instructions
+   * @param task - The original task string
+   * @returns The transformed task string
+   */
+  private _transformSpecialTasks(task: string): string {
+    // Exact match for special example tasks
+    if (task === "Visit BrowserOS launch and upvote ❤️") {
+      return "Navigate to https://dub.sh/browseros-launch (it will redirect to the actual page) then click the upvote button then use celebration_tool to show confetti";
+    }
+    if (task === "Go to GitHub and Star BrowserOS ⭐") {
+      return "Navigate to https://git.new/browserOS (it will redirect to the actual page) then click the star button if it is gray (not starred) then use celebration_tool to show confetti";
+    }
+    // Return original task if not a special case
+    return task;
+  }
+
+  /**
    * Main entry point.
    * Orchestrates classification and delegates to the appropriate execution strategy.
    * @param task - The task/query to execute
    * @param metadata - Optional execution metadata for controlling execution mode
    */
   async execute(task: string, metadata?: ExecutionMetadata): Promise<void> {
+    // Transform special example tasks into explicit instructions
+    const transformedTask = this._transformSpecialTasks(task);
+
     try {
       // 1. SETUP: Initialize system prompt and user task
-      this._initializeExecution(task);
+      this._initializeExecution(transformedTask);
 
       // 2. CHECK FOR PREDEFINED PLAN
       if (metadata?.executionMode === 'predefined' && metadata.predefinedPlan) {
         // Treat predefined plan as a fresh (non-follow-up) task: clear history and re-init
         this.messageManager.clear();
-        this._initializeExecution(task);
+        this._initializeExecution(transformedTask);
         // Route predefined plan through the multi-step strategy using initial plan
         const predefined = metadata!.predefinedPlan!;
         this.pubsub.publishMessage(PubSub.createMessage(`Executing agent: ${predefined.name || 'Custom Agent'}`, 'thinking'));
@@ -195,19 +216,19 @@ export class BrowserAgent {
           steps: predefined.steps.map(step => ({ action: step, reasoning: `Part of agent: ${predefined.name || 'Custom'}` }))
         };
         if (predefined.goal) {
-          this.messageManager.addHuman(`User's goal is: ${predefined.goal} and this is the task: ${task}`);
+          this.messageManager.addHuman(`User's goal is: ${predefined.goal} and this is the task: ${transformedTask}`);
         }
-        await this._executeMultiStepStrategy(task, initialPlan);
-        await this._generateTaskResult(task);
+        await this._executeMultiStepStrategy(transformedTask, initialPlan);
+        await this._generateTaskResult(transformedTask);
         return;
       }
       else if (metadata?.executionMode === 'dynamic' && metadata?.source === 'newtab') {
         // For tasks initiated from new tab, show the startup message with task
-        this.pubsub.publishMessage(PubSub.createMessage(`Executing task: ${task}`, 'thinking'));
+        this.pubsub.publishMessage(PubSub.createMessage(`Executing task: ${transformedTask}`, 'thinking'));
       }
 
       // 3. STANDARD FLOW: CLASSIFY task type
-      const classification = await this._classifyTask(task);
+      const classification = await this._classifyTask(transformedTask);
       
       // Log classification result to console for visibility
       if (ENABLE_EVALS2) {
@@ -217,9 +238,9 @@ export class BrowserAgent {
       // Clear message history if this is not a follow-up task
       if (!classification.is_followup_task) {
         this.messageManager.clear();
-        this._initializeExecution(task);
+        this._initializeExecution(transformedTask);
       }
-      
+
       let message: string;
       if (classification.is_followup_task && this.messageManager.getMessages().length > 0) {
         message = 'Following up on previous task...';
@@ -232,17 +253,17 @@ export class BrowserAgent {
 
       // 4. DELEGATE: Route to the correct execution strategy
       if (classification.is_simple_task) {
-        await this._executeSimpleTaskStrategy(task);
+        await this._executeSimpleTaskStrategy(transformedTask);
       } else {
-        await this._executeMultiStepStrategy(task);
+        await this._executeMultiStepStrategy(transformedTask);
       }
 
       // 5. FINALISE: Generate final result
-      await this._generateTaskResult(task);
+      await this._generateTaskResult(transformedTask);
       
       // Task completion is logged by NxtScape, not here
     } catch (error) {
-      this._handleExecutionError(error, task);
+      this._handleExecutionError(error, transformedTask);
     } finally {
       // Cleanup narrator service
       this.narrator?.cleanup();
@@ -302,6 +323,7 @@ export class BrowserAgent {
     this.toolManager.register(createStorageTool(this.executionContext));
     this.toolManager.register(createExtractTool(this.executionContext));
     this.toolManager.register(createHumanInputTool(this.executionContext));
+    this.toolManager.register(createCelebrationTool(this.executionContext));
     this.toolManager.register(createDateTool(this.executionContext));
     
     // Result tool

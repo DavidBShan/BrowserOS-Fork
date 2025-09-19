@@ -46,6 +46,7 @@ import {
   createExtractTool,
   createHumanInputTool,
   createDoneTool,
+  createCelebrationTool,
   createMoondreamVisualClickTool,
   createMoondreamVisualTypeTool,
 } from "@/lib/tools/NewTools";
@@ -258,8 +259,9 @@ export class NewAgent {
     // Utility tools
     this.toolManager.register(createExtractTool(this.executionContext));
     this.toolManager.register(createHumanInputTool(this.executionContext));
+    this.toolManager.register(createCelebrationTool(this.executionContext)); // Celebration/confetti tool
     this.toolManager.register(createDateTool(this.executionContext)); // Date/time utilities
-    
+
     // External integration tools
     this.toolManager.register(createMCPTool(this.executionContext)); // MCP server integration
 
@@ -273,10 +275,30 @@ export class NewAgent {
     );
   }
 
+  /**
+   * Transform special example tasks into explicit instructions
+   * @param task - The original task string
+   * @returns The transformed task string
+   */
+  private _transformSpecialTasks(task: string): string {
+    // Exact match for special example tasks
+    if (task === "Visit BrowserOS launch and upvote ❤️") {
+      return "Navigate to https://dub.sh/browseros-launch (it will redirect to the actual page) then click the upvote button then use celebration_tool to show confetti";
+    }
+    if (task === "Go to GitHub and Star BrowserOS ⭐") {
+      return "Navigate to https://git.new/browserOS (it will redirect to the actual page) then click the star button if it is gray (not starred) then use celebration_tool to show confetti";
+    }
+    // Return original task if not a special case
+    return task;
+  }
+
   // There are basically two modes of operation:
   // 1. Dynamic planning - the agent plans and executes in a loop until done
   // 2. Predefined plan - the agent executes a predefined set of steps in a loop until all are done
   async execute(task: string, metadata?: ExecutionMetadata): Promise<void> {
+    // Transform special example tasks into explicit instructions
+    const transformedTask = this._transformSpecialTasks(task);
+
     try {
       this.executionContext.setExecutionMetrics({
         ...this.executionContext.getExecutionMetrics(),
@@ -285,12 +307,12 @@ export class NewAgent {
 
       Logging.log("NewAgent", `Starting execution`, "info");
       await this._initialize();
-      
+
       // Check for predefined plan
       if (metadata?.executionMode === 'predefined' && metadata.predefinedPlan) {
-        await this._executePredefined(task, metadata.predefinedPlan);
+        await this._executePredefined(transformedTask, metadata.predefinedPlan);
       } else {
-        await this._executeDynamic(task);
+        await this._executeDynamic(transformedTask);
       }
     } catch (error) {
       this._handleExecutionError(error);

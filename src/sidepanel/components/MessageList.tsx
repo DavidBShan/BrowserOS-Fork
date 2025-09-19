@@ -16,6 +16,11 @@ import { useAnalytics } from '../hooks/useAnalytics'
 import { cn } from '@/sidepanel/lib/utils'
 import { groupMessages } from '../utils/messageGrouping'
 import type { Message } from '../stores/chatStore'
+import { useSidePanelPortMessaging } from '@/sidepanel/hooks'
+import { MessageType } from '@/lib/types/messaging'
+import { useChatStore } from '@/sidepanel/stores/chatStore'
+import { useSettingsStore } from '@/sidepanel/stores/settingsStore'
+import { useTabsStore } from '@/sidepanel/stores/tabsStore'
 
 interface MessageListProps {
   messages: Message[]
@@ -27,10 +32,11 @@ interface MessageListProps {
 
 // Example prompts - showcasing BrowserOS capabilities
 const EXAMPLES = [
-  "Open amazon.com and order Sensodyne toothpaste",
-  "Find top-rated headphones under $200", 
-  "Go to GitHub and Star BrowserOS",
-  "Turn this article into a LinkedIn post",
+  "Visit BrowserOS launch and upvote ❤️",
+  // "Find top-rated headphones under $200",
+  "Go to GitHub and Star BrowserOS ⭐",
+  // "Turn this article into a LinkedIn post",
+  "Open amazon.com and order Sensodyne toothpaste 🪥",
 ]
 
 // Animation constants  
@@ -43,6 +49,10 @@ const DEFAULT_DISPLAY_COUNT = 4 // Fixed number of examples to show
 export function MessageList({ messages, isProcessing = false, onScrollStateChange, scrollToBottom: externalScrollToBottom, containerRef: externalContainerRef }: MessageListProps) {
   const { containerRef: internalContainerRef, isUserScrolling, scrollToBottom } = useAutoScroll<HTMLDivElement>([messages], externalContainerRef)
   const { trackFeature } = useAnalytics()
+  const { sendMessage } = useSidePanelPortMessaging()
+  const { upsertMessage, setProcessing } = useChatStore()
+  const { chatMode, setChatMode } = useSettingsStore()
+  const { getContextTabs, clearSelectedTabs } = useTabsStore()
   const [, setIsAtBottom] = useState(true)
   const [currentExamples] = useState<string[]>(EXAMPLES)
   const [isAnimating] = useState(false)
@@ -189,10 +199,30 @@ export function MessageList({ messages, isProcessing = false, onScrollStateChang
   }
 
   const handleExampleClick = (prompt: string) => {
+    // Prevent any event propagation that might interfere
     trackFeature('example_prompt', { prompt })
-    // Create a custom event to set input value
-    const event = new CustomEvent('setInputValue', { detail: prompt })
-    window.dispatchEvent(event)
+
+    // Switch to Agent Mode for example runs
+    try { setChatMode(false) } catch { /* no-op */ }
+
+    // Mirror ChatInput.submitTask behavior
+    const msgId = `user_${Date.now()}`
+    upsertMessage({ msgId, role: 'user', content: prompt, ts: Date.now() })
+    setProcessing(true)
+
+    // Collect selected context tabs (same behavior as ChatInput)
+    const contextTabs = getContextTabs()
+    const tabIds = contextTabs.length > 0 ? contextTabs.map(tab => tab.id) : undefined
+
+    sendMessage(MessageType.EXECUTE_QUERY, {
+      query: prompt.trim(),
+      tabIds,
+      source: 'sidepanel',
+      chatMode: false
+    })
+
+    // Clear selected tabs after sending (mirror ChatInput)
+    try { clearSelectedTabs() } catch { /* no-op */ }
   }
   
   // Landing View
@@ -203,22 +233,23 @@ export function MessageList({ messages, isProcessing = false, onScrollStateChang
         role="region"
         aria-label="Welcome screen with example prompts"
       >
-        {/* Main content - vertically centered */}
-        <div className="relative z-0 flex flex-col items-center justify-center min-h-0 max-w-md w-full">
-          {/* Main tagline with logo */}
-          <div className="mb-8 flex flex-col items-center">
-            <h2 className="text-3xl font-bold text-muted-foreground animate-fade-in-up flex items-baseline flex-wrap justify-center gap-2 text-center w-full">
-              <span>Your <span className="text-brand">Agentic</span></span>
-              <span>web assistant{' '}
-                <img 
-                  src="/assets/browseros.svg" 
-                  alt="BrowserOS" 
-                  className="w-7 h-7 inline-block align-text-bottom animate-fade-in-up"
-                />
-              </span>
-            </h2>
-          </div>
+        {/* Fixed tagline near the top */}
+        <div className="absolute left-0 right-0 top-16 md:top-20 flex items-center justify-center pointer-events-none select-none">
+          <h2 className="text-3xl font-bold text-muted-foreground animate-fade-in-up flex items-baseline flex-wrap justify-center gap-2 text-center w-full">
+            <span>Your <span className="text-brand">Agentic</span></span>
+            <span>
+              web assistant{' '}
+              <img 
+                src="/assets/browseros.svg" 
+                alt="BrowserOS" 
+                className="w-7 h-7 inline-block align-text-bottom animate-fade-in-up"
+              />
+            </span>
+          </h2>
+        </div>
 
+        {/* Main content - vertically centered (Examples remain centered) */}
+        <div className="relative z-0 flex flex-col items-center justify-center min-h-0 max-w-md w-full">
           {/* Example Prompts */}
           <div className="mb-8 mt-2">
             <h3 className="text-lg font-semibold text-foreground mb-6 animate-fade-in-up" style={{ animationDelay: '0.4s' }}>
@@ -240,9 +271,14 @@ export function MessageList({ messages, isProcessing = false, onScrollStateChang
                   }`}
                 >
                   <Button
+                    type="button"
                     variant="outline"
                     className="group relative text-sm h-auto py-3 px-4 whitespace-normal bg-background/50 backdrop-blur-sm border-2 border-brand/30 hover:border-brand hover:bg-brand/5 smooth-hover smooth-transform hover:scale-105 hover:-translate-y-1 hover:shadow-lg focus-visible:outline-none overflow-hidden w-full message-enter"
-                    onClick={() => handleExampleClick(prompt)}
+                    onClick={(e: React.MouseEvent) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      handleExampleClick(prompt)
+                    }}
                     aria-label={`Use example: ${prompt}`}
                   >
                     {/* Animated background */}

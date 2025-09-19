@@ -13,6 +13,7 @@ import { PubSubChannel } from "@/lib/pubsub/PubSubChannel";
 import { Logging } from "@/lib/utils/Logging";
 import { invokeWithRetry } from "@/lib/utils/retryable";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
+import { CONFETTI_SCRIPT } from "@/lib/utils/confetti";
 
 // Tool result schema - EXACT from NewAgent
 const ToolResultSchema = z.object({
@@ -30,6 +31,7 @@ export function createNewTools(
   context: ExecutionContext,
 ): DynamicStructuredTool[] {
   return [
+    createClickTool(context),
     createTypeTool(context),
     createClearTool(context),
     createScrollTool(context),
@@ -45,6 +47,7 @@ export function createNewTools(
     createExtractTool(context),
     createHumanInputTool(context),
     createDoneTool(context),
+    createCelebrationTool(context),
     createMoondreamVisualClickTool(context),
     createMoondreamVisualTypeTool(context),
     createClickAtCoordinatesTool(context),
@@ -941,6 +944,53 @@ export function createDoneTool(
         },
       });
     },
+  });
+}
+
+// Celebration Tool
+export function createCelebrationTool(
+  context: ExecutionContext,
+): DynamicStructuredTool {
+  return new DynamicStructuredTool({
+    name: "celebration",
+    description: "Shows a confetti celebration animation on the current page. Use this to celebrate successful actions like upvoting or starring.",
+    schema: z.object({}),  // No parameters needed
+    func: async () => {
+      try {
+        context.incrementMetric("toolCalls");
+
+        // Emit thinking message
+        context.getPubSub().publishMessage(
+          PubSubChannel.createMessage("🎉 Celebrating...", "thinking")
+        );
+
+        // Get current page from browserContext
+        const page = await context.browserContext.getCurrentPage();
+        if (!page) {
+          return JSON.stringify({
+            ok: false,
+            error: "No active page to show celebration"
+          });
+        }
+
+        // Use shared confetti script
+
+        // Execute confetti script
+        await page.executeJavaScript(CONFETTI_SCRIPT);
+
+        return JSON.stringify({
+          ok: true,
+          output: "Confetti celebration shown!"
+        });
+
+      } catch (error) {
+        context.incrementMetric("errors");
+        return JSON.stringify({
+          ok: false,
+          error: `Failed to show celebration: ${error instanceof Error ? error.message : String(error)}`
+        });
+      }
+    }
   });
 }
 
