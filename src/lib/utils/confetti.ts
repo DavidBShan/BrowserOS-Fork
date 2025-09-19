@@ -21,7 +21,7 @@ export const CONFETTI_SCRIPT = `
     const left = Math.random() * 100;
     const animationDelay = Math.random() * 2;
     const animationDuration = 3 + Math.random() * 2;
-    const size = 10 + Math.random() * 40;
+    const size = 20 + Math.random() * 40;
 
     confetto.style.cssText = \`
       position:absolute;
