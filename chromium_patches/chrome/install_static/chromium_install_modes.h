@@ -1,5 +1,5 @@
 diff --git a/chrome/install_static/chromium_install_modes.h b/chrome/install_static/chromium_install_modes.h
-index 7de32cf745755..4b10fc5900fbb 100644
+index 7de32cf745755..ae4e81676bf89 100644
 --- a/chrome/install_static/chromium_install_modes.h
 +++ b/chrome/install_static/chromium_install_modes.h
 @@ -33,17 +33,17 @@ inline constexpr auto kInstallModes = std::to_array<InstallConstants>({
@@ -13,12 +13,12 @@ index 7de32cf745755..4b10fc5900fbb 100644
 +            L"{CF887152-7CB8-4393-84CC-1BACF0EDE1D1}",  // BrowserOS app GUID.
 +        .base_app_name = L"BrowserOS",              // A distinct base_app_name.
 +        .base_app_id = L"BrowserOS",                // A distinct base_app_id.
-+        .browser_prog_id_prefix = L"BrowserOSHTML",  // Browser ProgID prefix.
++        .browser_prog_id_prefix = L"BOSHTML",  // Browser ProgID prefix.
          .browser_prog_id_description =
 -            L"Chromium HTML Document",         // Browser ProgID description.
 -        .pdf_prog_id_prefix = L"ChromiumPDF",  // PDF ProgID prefix.
 +            L"BrowserOS HTML Document",         // Browser ProgID description.
-+        .pdf_prog_id_prefix = L"BrowserOSPDF",  // PDF ProgID prefix.
++        .pdf_prog_id_prefix = L"BOSPDF",  // PDF ProgID prefix.
          .pdf_prog_id_description =
 -            L"Chromium PDF Document",  // PDF ProgID description.
 +            L"BrowserOS PDF Document",  // PDF ProgID description.
