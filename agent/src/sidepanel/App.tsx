@@ -14,11 +14,11 @@ import './styles.css'
  * Uses Tailwind CSS for styling
  */
 export function App() {
-  // Initialize message handling
-  const { humanInputRequest, clearHumanInputRequest } = useMessageHandler()
-  
   // Get connection status from port messaging
   const { connected } = useSidePanelPortMessaging()
+  
+  // Initialize message handling
+  const { humanInputRequest, clearHumanInputRequest } = useMessageHandler()
   
   // Initialize settings
   const { fontSize, theme } = useSettingsStore()

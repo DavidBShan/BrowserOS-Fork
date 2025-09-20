@@ -19,23 +19,22 @@ import { BrowserOSProvider } from '@/lib/llm/settings/browserOSTypes'
 import { Logging } from '@/lib/utils/Logging'
 
 // Default constants
-const DEFAULT_TEMPERATURE = 0.7
+const DEFAULT_TEMPERATURE = 0.2
 const DEFAULT_STREAMING = true
 const DEFAULT_MAX_TOKENS = 4096
 const DEFAULT_OPENAI_MODEL = "gpt-4o"
 const DEFAULT_ANTHROPIC_MODEL = 'claude-4-sonnet'
 const DEFAULT_OLLAMA_MODEL = "qwen3:4b"
-const DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434"
-const DEFAULT_NXTSCAPE_PROXY_URL = "https://llm.browseros.com/default/"
-const DEFAULT_NXTSCAPE_MODEL = "default-llm"
+const DEFAULT_OLLAMA_BASE_URL = "http://127.0.0.1:11434"
+const DEFAULT_BROWSEROS_PROXY_URL = "https://llm.browseros.com/default/"
+const DEFAULT_BROWSEROS_MODEL = "default-llm"
 const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
 
-// Simple cache for LLM instances
-const llmCache = new Map<string, BaseChatModel>()
 
 // Model capabilities interface
 export interface ModelCapabilities {
   maxTokens: number;  // Maximum context window size
+  supportsImages: boolean;  // Whether the provider supports image inputs
 }
 
 export class LangChainProvider {
@@ -59,17 +58,9 @@ export class LangChainProvider {
     const provider = await LLMSettingsReader.read()
     this.currentProvider = provider
     
-    // Check cache
-    const cacheKey = this._getCacheKey(provider, options)
-    if (llmCache.has(cacheKey)) {
-      Logging.log('LangChainProvider', `Using cached LLM for provider: ${provider.name}`, 'info')
-      return llmCache.get(cacheKey)!
-    }
-    
     // Create new LLM instance based on provider type
     Logging.log('LangChainProvider', `Creating new LLM for provider: ${provider.name}`, 'info')
     const llm = this._createLLMFromProvider(provider, options)
-    llmCache.set(cacheKey, llm)
     
     // Log metrics about the LLM configuration
     const maxTokens = this._calculateMaxTokens(provider, options?.maxTokens)
@@ -87,56 +78,75 @@ export class LangChainProvider {
   // Get model capabilities based on provider
   async getModelCapabilities(): Promise<ModelCapabilities> {
     const provider = await LLMSettingsReader.read()
-    
+
+    // Get image support from provider capabilities or defaults
+    const supportsImages = provider.capabilities?.supportsImages ??
+                          this._getDefaultImageSupport(provider.type)
+
+    // Get max tokens
+    let maxTokens: number
+
     // Use provider's context window if available
     if (provider.modelConfig?.contextWindow) {
-      return { maxTokens: provider.modelConfig.contextWindow }
+      maxTokens = provider.modelConfig.contextWindow
+    } else {
+      // Otherwise determine based on provider type and model
+      switch (provider.type) {
+        case 'browseros':
+          // BrowserOS/Nxtscape uses gemini 2.5 flash by default
+          maxTokens = 1_000_000
+          break
+
+        case 'openai':
+        case 'openai_compatible':
+        case 'openrouter':
+          const modelId = provider.modelId || DEFAULT_OPENAI_MODEL
+          if (modelId.includes('gpt-4') || modelId.includes('o1') || modelId.includes('o3') || modelId.includes('o4')) {
+            maxTokens = 128_000
+          } else {
+            maxTokens = 32_768
+          }
+          break
+
+        case 'anthropic':
+          const anthropicModel = provider.modelId || DEFAULT_ANTHROPIC_MODEL
+          if (anthropicModel.includes('claude-3.7') || anthropicModel.includes('claude-4')) {
+            maxTokens = 200_000
+          } else {
+            maxTokens = 100_000
+          }
+          break
+
+        case 'google_gemini':
+          const geminiModel = provider.modelId || DEFAULT_GEMINI_MODEL
+          if (geminiModel.includes('2.5') || geminiModel.includes('2.0')) {
+            maxTokens = 1_500_000
+          } else {
+            maxTokens = 1_000_000
+          }
+          break
+
+        case 'ollama':
+          const ollamaModel = provider.modelId || DEFAULT_OLLAMA_MODEL
+          if (ollamaModel.includes('mixtral') || ollamaModel.includes('llama') ||
+              ollamaModel.includes('qwen') || ollamaModel.includes('deepseek')) {
+            maxTokens = 32_768
+          } else {
+            maxTokens = 8_192
+          }
+          break
+
+        case 'custom':
+          // Custom providers - conservative default
+          maxTokens = 32_768
+          break
+
+        default:
+          maxTokens = 8_192
+      }
     }
-    
-    // Otherwise determine based on provider type and model
-    switch (provider.type) {
-      case 'browseros':
-        // BrowserOS/Nxtscape uses gemini 2.5 flash by default
-        return { maxTokens: 1_000_000 }
-        
-      case 'openai':
-      case 'openai_compatible':
-      case 'openrouter':
-        const modelId = provider.modelId || DEFAULT_OPENAI_MODEL
-        if (modelId.includes('gpt-4') || modelId.includes('o1') || modelId.includes('o3') || modelId.includes('o4')) {
-          return { maxTokens: 128_000 }
-        }
-        return { maxTokens: 32_768 }
-        
-      case 'anthropic':
-        const anthropicModel = provider.modelId || DEFAULT_ANTHROPIC_MODEL
-        if (anthropicModel.includes('claude-3.7') || anthropicModel.includes('claude-4')) {
-          return { maxTokens: 200_000 }
-        }
-        return { maxTokens: 100_000 }
-        
-      case 'google_gemini':
-        const geminiModel = provider.modelId || DEFAULT_GEMINI_MODEL
-        if (geminiModel.includes('2.5') || geminiModel.includes('2.0')) {
-          return { maxTokens: 1_500_000 }
-        }
-        return { maxTokens: 1_000_000 }
-        
-      case 'ollama':
-        const ollamaModel = provider.modelId || DEFAULT_OLLAMA_MODEL
-        if (ollamaModel.includes('mixtral') || ollamaModel.includes('llama') || 
-            ollamaModel.includes('qwen') || ollamaModel.includes('deepseek')) {
-          return { maxTokens: 32_768 }
-        }
-        return { maxTokens: 8_192 }
-        
-      case 'custom':
-        // Custom providers - conservative default
-        return { maxTokens: 32_768 }
-        
-      default:
-        return { maxTokens: 8_192 }
-    }
+
+    return { maxTokens, supportsImages }
   }
   
   getCurrentProvider(): BrowserOSProvider | null {
@@ -144,7 +154,6 @@ export class LangChainProvider {
   }
   
   clearCache(): void {
-    llmCache.clear()
     this.currentProvider = null
   }
   
@@ -156,7 +165,7 @@ export class LangChainProvider {
   private _getDefaultModelForProvider(type: string): string {
     switch (type) {
       case 'browseros':
-        return DEFAULT_NXTSCAPE_MODEL
+        return DEFAULT_BROWSEROS_MODEL
       case 'openai':
       case 'openai_compatible':
       case 'openrouter':
@@ -170,6 +179,26 @@ export class LangChainProvider {
         return DEFAULT_OLLAMA_MODEL
       default:
         return 'unknown'
+    }
+  }
+
+  private _getDefaultImageSupport(type: string): boolean {
+    switch (type) {
+      case 'browseros':
+      case 'openai':
+      case 'openai_compatible':
+      case 'anthropic':
+      case 'google_gemini':
+      case 'openrouter':
+        return true
+      case 'ollama':
+        // Most Ollama models don't support images by default
+        return false
+      case 'custom':
+        // Conservative default for custom providers
+        return false
+      default:
+        return false
     }
   }
   
@@ -308,13 +337,13 @@ export class LangChainProvider {
     streaming: boolean = true
   ): ChatOpenAI {
     const model = new ChatOpenAI({
-      modelName: DEFAULT_NXTSCAPE_MODEL,
+      modelName: DEFAULT_BROWSEROS_MODEL,
       temperature,
       maxTokens,
       streaming,
       openAIApiKey: 'nokey',
       configuration: {
-        baseURL: DEFAULT_NXTSCAPE_PROXY_URL,
+        baseURL: DEFAULT_BROWSEROS_PROXY_URL,
         apiKey: 'nokey',
         dangerouslyAllowBrowser: true
       }
@@ -418,53 +447,31 @@ export class LangChainProvider {
     temperature: number,
     maxTokens?: number
   ): ChatOllama {
+    // Ensure we use 127.0.0.1 instead of localhost for better compatibility
+    // TODO: move this to C++ patch
+    let baseUrl = provider.baseUrl || DEFAULT_OLLAMA_BASE_URL
+    if (baseUrl.includes('localhost')) {
+      baseUrl = baseUrl.replace('localhost', '127.0.0.1')
+      Logging.log('LangChainProvider',
+        'Replaced "localhost" with "127.0.0.1" in Ollama URL for better compatibility',
+        'info')
+    }
+
     const ollamaConfig: any = {
       model: provider.modelId || DEFAULT_OLLAMA_MODEL,
       temperature,
       maxRetries: 2,
-      baseUrl: provider.baseUrl || DEFAULT_OLLAMA_BASE_URL
+      baseUrl
     }
-    
+
     // Add context window if specified in provider config
     if (provider.modelConfig?.contextWindow) {
       ollamaConfig.numCtx = provider.modelConfig.contextWindow
     }
-    
+
     const model = new ChatOllama(ollamaConfig)
-    
+
     return this._patchTokenCounting(model)
-  }
-  
-  // Cache key includes all relevant provider settings and options
-  private _getCacheKey(
-    provider: BrowserOSProvider, 
-    options?: { temperature?: number; maxTokens?: number }
-  ): string {
-    // Create a deterministic string from all cache-relevant values
-    // Using string concatenation is faster than JSON.stringify for simple cases
-    const keyParts = [
-      provider.id,
-      provider.type,
-      provider.modelId || 'd',
-      provider.baseUrl || 'd',
-      provider.apiKey ? provider.apiKey.slice(-8) : 'n',  // Last 8 chars of API key
-      provider.modelConfig?.temperature?.toString() || 'd',
-      provider.modelConfig?.contextWindow?.toString() || 'd',
-      options?.temperature?.toString() || 'd',
-      options?.maxTokens?.toString() || 'd',
-      provider.updatedAt  // Include update timestamp to invalidate cache on provider changes
-    ]
-    
-    // Use FNV-1a hash (very fast, good distribution for short strings)
-    const str = keyParts.join('|')
-    let hash = 2166136261  // FNV offset basis
-    for (let i = 0; i < str.length; i++) {
-      hash ^= str.charCodeAt(i)
-      hash = (hash * 16777619) >>> 0  // FNV prime, keep as 32-bit unsigned
-    }
-    
-    // Return provider ID with hash for readability (base36 is compact)
-    return `${provider.id}-${hash.toString(36)}`
   }
 }
 

@@ -70,10 +70,11 @@ export function Chat({ isConnected }: ChatProps) {
             </div>
           )}
         >
-          <main id="main-content" className="h-full">
+          <main id="main-content" className="h-full min-h-0">
             
             <MessageList 
               messages={messages} 
+              isProcessing={isProcessing}
               onScrollStateChange={setIsUserScrolling}
               scrollToBottom={handleScrollToBottom}
               containerRef={messageListRef}

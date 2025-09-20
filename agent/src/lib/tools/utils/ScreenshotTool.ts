@@ -19,8 +19,8 @@ export function createScreenshotTool(executionContext: ExecutionContext): Dynami
     description: `Capture a screenshot of the current page. Use liberally - screenshots are fast and free!
 
 SIZE OPTIONS:
-• small (256px): Low detail, minimal token usage - for quick checks
-• medium (512px): Balanced quality and token usage - DEFAULT
+• small (256px): Low detail, minimal token usage - just visual layout checks
+• medium (768px): Balanced quality and token usage - DEFAULT
 • large (1028px): High detail - for complex pages or detailed analysis
 
 USE FOR DECISION-MAKING:
@@ -41,7 +41,7 @@ Screenshots help you see what's on the page and make better decisions.`,
       try {
         // Check if model has enough tokens for screenshots
         const maxTokens = executionContext.messageManager.getMaxTokens()
-        const MIN_TOKENS_FOR_SCREENSHOTS = 128000  // 128k minimum
+        const MIN_TOKENS_FOR_SCREENSHOTS = 64000  // 128k minimum
         
         if (maxTokens < MIN_TOKENS_FOR_SCREENSHOTS) {
           Logging.log('ScreenshotTool', 
@@ -73,16 +73,16 @@ Screenshots help you see what's on the page and make better decisions.`,
 
         const page = await executionContext.browserContext.getCurrentPage()
         if (!page) {
-          const error = 'No active page found to take screenshot'
-          Logging.log('ScreenshotTool', error, 'error')
-          return JSON.stringify(toolError(error))
+          Logging.log('ScreenshotTool', 'No active page found to take screenshot', 'error')
+          executionContext.messageManager.addAI('Screenshot unavailable - no active page. Continuing without visual verification.')
+          return JSON.stringify(toolSuccess('Screenshot unavailable. Proceeding without visual capture.'))
         }
 
         const screenshotDataUrl = await page.takeScreenshot(selectedSize)
         if (!screenshotDataUrl) {
-          const error = 'Failed to capture screenshot - no data returned'
-          Logging.log('ScreenshotTool', error, 'error')
-          return JSON.stringify(toolError(error))
+          Logging.log('ScreenshotTool', 'Failed to capture screenshot - no data returned', 'error')
+          executionContext.messageManager.addAI('Screenshot capture failed. Continuing without visual verification.')
+          return JSON.stringify(toolSuccess('Screenshot unavailable. Proceeding without visual capture.'))
         }
         
         Logging.log('ScreenshotTool', 
@@ -101,11 +101,8 @@ Screenshots help you see what's on the page and make better decisions.`,
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error)
         Logging.log('ScreenshotTool', `Error capturing screenshot: ${errorMessage}`, 'error')
-        
-        executionContext.getPubSub().publishMessage(
-          PubSub.createMessageWithId(PubSub.generateId('ToolError'), `Screenshot failed: ${errorMessage}`, 'error')
-        )
-        return JSON.stringify(toolError(errorMessage))  // Return raw error
+        executionContext.messageManager.addAI('Screenshot capture failed. Continuing without visual verification.')
+        return JSON.stringify(toolSuccess('Screenshot unavailable. Proceeding without visual capture.'))
       }
     }
   })
