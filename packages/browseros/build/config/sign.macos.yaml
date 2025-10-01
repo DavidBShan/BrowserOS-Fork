@@ -14,7 +14,7 @@ steps:
   apply_patches: false
   build: false
   sign: true
-  package: false
+  package: true
 
 paths:
   root_dir: .
