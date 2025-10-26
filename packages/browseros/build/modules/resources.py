@@ -10,7 +10,7 @@ import yaml
 import subprocess
 from pathlib import Path
 from context import BuildContext
-from utils import log_info, log_success, log_error, log_warning
+from utils import log_info, log_success, log_error, log_warning, get_platform
 
 
 def copy_resources(ctx: BuildContext, commit_each: bool = False) -> bool:
@@ -44,6 +44,8 @@ def copy_resources(ctx: BuildContext, commit_each: bool = False) -> bool:
         destination = operation["destination"]
         op_type = operation.get("type", "directory")
         build_type_condition = operation.get("build_type")
+        os_condition = operation.get("os")
+        arch_condition = operation.get("arch")
 
         # Skip operation if build_type condition doesn't match
         if build_type_condition and build_type_condition != ctx.build_type:
@@ -51,6 +53,23 @@ def copy_resources(ctx: BuildContext, commit_each: bool = False) -> bool:
                 f"  ⏭️  Skipping {name} (build_type: {build_type_condition}, current: {ctx.build_type})"
             )
             continue
+
+        # Skip operation if os condition doesn't match
+        if os_condition:
+            current_os = get_platform()
+            if current_os not in os_condition:
+                log_info(
+                    f"  ⏭️  Skipping {name} (os: {os_condition}, current: {current_os})"
+                )
+                continue
+
+        # Skip operation if arch condition doesn't match
+        if arch_condition:
+            if ctx.architecture not in arch_condition:
+                log_info(
+                    f"  ⏭️  Skipping {name} (arch: {arch_condition}, current: {ctx.architecture})"
+                )
+                continue
 
         # Resolve paths
         src_path = ctx.root_dir / source

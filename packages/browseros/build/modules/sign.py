@@ -22,6 +22,28 @@ from utils import (
     join_paths,
 )
 
+# Central list of BrowserOS Server binaries we need to sign explicitly.
+# Each entry controls identifiers, signing options, and entitlement files so
+# adding a new binary is a one-line update here rather than scattered changes.
+BROWSEROS_SERVER_BINARIES: Dict[str, Dict[str, str]] = {
+    "browseros_server": {
+        "identifier_suffix": "browseros_server",
+        "options": "runtime",
+        "entitlements": "browseros-executable-entitlements.plist",
+    },
+    "codex": {
+        "identifier_suffix": "codex",
+        "options": "runtime",
+        "entitlements": "browseros-executable-entitlements.plist",
+    },
+}
+
+
+def get_browseros_server_binary_info(component_path: Path) -> Optional[Dict[str, str]]:
+    """Return metadata for known BrowserOS Server binaries, if applicable."""
+    name = component_path.stem.lower()
+    return BROWSEROS_SERVER_BINARIES.get(name)
+
 
 def run_command(
     cmd: List[str],
@@ -213,13 +235,18 @@ def get_identifier_for_component(
         "chrome_crashpad_handler": f"{base_identifier}.crashpad_handler",
         "app_mode_loader": f"{base_identifier}.app_mode_loader",
         "web_app_shortcut_copier": f"{base_identifier}.web_app_shortcut_copier",
-        "browseros_server": f"{base_identifier}.browseros_server",
     }
 
     # Check for special cases
     for key, identifier in special_identifiers.items():
         if key in str(component_path):
             return identifier
+
+    # BrowserOS Server binaries share the same entitlements/options but need unique identifiers.
+    browseros_server_info = get_browseros_server_binary_info(component_path)
+    if browseros_server_info:
+        suffix = browseros_server_info.get("identifier_suffix", component_path.stem)
+        return f"{base_identifier}.{suffix}"
 
     # For helper apps
     if "Helper" in name:
@@ -261,9 +288,10 @@ def get_signing_options(component_path: Path) -> str:
     ):
         return "restrict,kill,runtime"
 
-    # For browseros_server - needs JIT, minimal restrictions
-    if "browseros_server" in str(component_path).lower():
-        return "runtime"
+    # Known BrowserOS Server binaries share the same relaxed options.
+    browseros_server_info = get_browseros_server_binary_info(component_path)
+    if browseros_server_info:
+        return browseros_server_info.get("options", "runtime")
 
     # For dylibs - library flag ONLY for dynamic libraries
     if component_path.suffix == ".dylib":
@@ -351,13 +379,15 @@ def sign_all_components(
 
             # Check for specific entitlements
             entitlements = None
-            if "browseros_server" in str(exe).lower():
-                entitlements_name = "browseros-server-entitlements.plist"
-                for ent_dir in entitlements_dirs:
-                    ent_path = join_paths(ent_dir, entitlements_name)
-                    if ent_path.exists():
-                        entitlements = ent_path
-                        break
+            browseros_server_info = get_browseros_server_binary_info(exe)
+            if browseros_server_info:
+                entitlements_name = browseros_server_info.get("entitlements")
+                if entitlements_name:
+                    for ent_dir in entitlements_dirs:
+                        ent_path = join_paths(ent_dir, entitlements_name)
+                        if ent_path.exists():
+                            entitlements = ent_path
+                            break
 
             if not sign_component(exe, certificate_name, identifier, options, entitlements):
                 return False

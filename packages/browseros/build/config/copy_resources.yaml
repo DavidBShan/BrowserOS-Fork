@@ -1,11 +1,36 @@
 # Copy resources configuration for Nxtscape build
 # This file defines all copy operations for resources during the build process
 #
-# Build Type Conditional Operations:
+# Conditional Operations:
 # - Use 'build_type' field to specify when an operation should run
-# - Supported build types: debug, release, dev, prod
-# - Operations without build_type run for all builds
-# - debug/dev = development builds, release/prod = production builds
+#   - Supported build types: debug, release, dev, prod
+#   - Operations without build_type run for all builds
+# - Use 'os' field to specify target operating systems
+#   - Supported values: windows, macos, linux (case-sensitive)
+#   - Operations without os run for all platforms
+# - Use 'arch' field to specify target architectures
+#   - Supported values: x64, arm64
+#   - Operations without arch run for all architectures
+#
+# Example:
+#   - name: "macOS-only Binary"
+#     source: "resources/binaries/macos_only"
+#     destination: "chrome/browser/resources/macos/"
+#     type: "directory"
+#     os: ["macos"]
+#
+#   - name: "ARM64-only Library"
+#     source: "resources/libs/arm64_optimized"
+#     destination: "chrome/browser/lib/"
+#     type: "directory"
+#     arch: ["arm64"]
+#
+#   - name: "Windows x64 DLL"
+#     source: "resources/dlls/x64/special.dll"
+#     destination: "chrome/browser/resources/"
+#     type: "file"
+#     os: ["windows"]
+#     arch: ["x64"]
 
 copy_operations:
   # Extensions
@@ -97,8 +122,81 @@ copy_operations:
     destination: "chrome/app/theme/default_200_percent/chromium/product_logo_32.png"
     type: "file"
 
-  # Binaries
-  - name: "BrowserOS Server Binaries"
-    source: "resources/binaries/browseros_server/*"
-    destination: "chrome/browser/browseros_server/binaries/"
-    type: "files"
+  # BrowserOS Server Binary - Platform & Architecture specific
+  - name: "BrowserOS Server Binary - macOS ARM64"
+    source: "resources/binaries/browseros_server/browseros-server-darwin-arm64"
+    destination: "chrome/browser/browseros_server/resources/bin/browseros_server"
+    type: "file"
+    os: ["macos"]
+    arch: ["arm64"]
+
+  - name: "BrowserOS Server Binary - macOS x64"
+    source: "resources/binaries/browseros_server/browseros-server-darwin-x64"
+    destination: "chrome/browser/browseros_server/resources/bin/browseros_server"
+    type: "file"
+    os: ["macos"]
+    arch: ["x64"]
+
+  - name: "BrowserOS Server Binary - Linux ARM64"
+    source: "resources/binaries/browseros_server/browseros-server-linux-arm64"
+    destination: "chrome/browser/browseros_server/resources/bin/browseros_server"
+    type: "file"
+    os: ["linux"]
+    arch: ["arm64"]
+
+  - name: "BrowserOS Server Binary - Linux x64"
+    source: "resources/binaries/browseros_server/browseros-server-linux-x64"
+    destination: "chrome/browser/browseros_server/resources/bin/browseros_server"
+    type: "file"
+    os: ["linux"]
+    arch: ["x64"]
+
+  - name: "BrowserOS Server Binary - Windows x64"
+    source: "resources/binaries/browseros_server/browseros-server-windows-x64.exe"
+    destination: "chrome/browser/browseros_server/resources/bin/browseros_server.exe"
+    type: "file"
+    os: ["windows"]
+    arch: ["x64"]
+
+  # Codex Binary - Platform & Architecture specific
+  - name: "Codex Binary - macOS ARM64"
+    source: "resources/binaries/codex/codex-aarch64-apple-darwin"
+    destination: "chrome/browser/browseros_server/resources/bin/codex"
+    type: "file"
+    os: ["macos"]
+    arch: ["arm64"]
+
+  - name: "Codex Binary - macOS x64"
+    source: "resources/binaries/codex/codex-x86_64-apple-darwin"
+    destination: "chrome/browser/browseros_server/resources/bin/codex"
+    type: "file"
+    os: ["macos"]
+    arch: ["x64"]
+
+  - name: "Codex Binary - Linux ARM64"
+    source: "resources/binaries/codex/codex-aarch64-unknown-linux-musl"
+    destination: "chrome/browser/browseros_server/resources/bin/codex"
+    type: "file"
+    os: ["linux"]
+    arch: ["arm64"]
+
+  - name: "Codex Binary - Linux x64"
+    source: "resources/binaries/codex/codex-x86_64-unknown-linux-musl"
+    destination: "chrome/browser/browseros_server/resources/bin/codex"
+    type: "file"
+    os: ["linux"]
+    arch: ["x64"]
+
+  - name: "Codex Binary - Windows ARM64"
+    source: "resources/binaries/codex/codex-aarch64-pc-windows-msvc.exe"
+    destination: "chrome/browser/browseros_server/resources/bin/codex.exe"
+    type: "file"
+    os: ["windows"]
+    arch: ["arm64"]
+
+  - name: "Codex Binary - Windows x64"
+    source: "resources/binaries/codex/codex-x86_64-pc-windows-msvc.exe"
+    destination: "chrome/browser/browseros_server/resources/bin/codex.exe"
+    type: "file"
+    os: ["windows"]
+    arch: ["x64"]
