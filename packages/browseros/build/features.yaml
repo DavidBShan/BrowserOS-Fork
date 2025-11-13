@@ -166,6 +166,10 @@ features:
     description: 'patch: chrome version update'
     files:
     - chrome/VERSION
+  default-light-mode:
+    description: enable light mode as default theme
+    files:
+    - chrome/browser/themes/theme_service_factory.cc
   disable-chrome-labs-pinning:
     description: 'patch: disable-chrome-labs-pinning'
     files:
