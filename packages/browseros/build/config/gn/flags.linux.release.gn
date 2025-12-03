@@ -14,7 +14,7 @@ clang_use_chrome_plugins = false
 fatal_linker_warnings = false
 
 # Core features
-enable_nacl = false
+# enable_nacl = false
 enable_widevine = true
 disable_fieldtrial_testing_config = true
 

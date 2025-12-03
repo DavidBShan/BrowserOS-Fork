@@ -1,9 +1,9 @@
 diff --git a/chrome/browser/ui/webui/clash_of_gpts/clash_of_gpts_ui.cc b/chrome/browser/ui/webui/clash_of_gpts/clash_of_gpts_ui.cc
 new file mode 100644
-index 0000000000000..fafdf120def3d
+index 0000000000000..ce25eefa09ff9
 --- /dev/null
 +++ b/chrome/browser/ui/webui/clash_of_gpts/clash_of_gpts_ui.cc
-@@ -0,0 +1,103 @@
+@@ -0,0 +1,104 @@
 +// Copyright 2025 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -15,6 +15,7 @@ index 0000000000000..fafdf120def3d
 +#include "base/memory/ref_counted_memory.h"
 +#include "chrome/browser/profiles/profile.h"
 +#include "chrome/browser/ui/browser.h"
++#include "chrome/browser/ui/browser_window/public/browser_window_features.h"
 +#include "chrome/browser/ui/browser_finder.h"
 +#include "chrome/browser/ui/views/side_panel/clash_of_gpts/clash_of_gpts_coordinator.h"
 +#include "chrome/common/webui_url_constants.h"
@@ -102,9 +103,8 @@ index 0000000000000..fafdf120def3d
 +  // Open the Clash of GPTs window
 +  Browser* browser = chrome::FindBrowserWithTab(web_ui->GetWebContents());
 +  if (browser) {
-+    ClashOfGptsCoordinator::GetOrCreateForBrowser(browser)->Show();
++    browser->browser_window_features()->clash_of_gpts_coordinator()->Show();
 +  }
 +}
 +
 +ClashOfGptsUI::~ClashOfGptsUI() = default;
-\ No newline at end of file

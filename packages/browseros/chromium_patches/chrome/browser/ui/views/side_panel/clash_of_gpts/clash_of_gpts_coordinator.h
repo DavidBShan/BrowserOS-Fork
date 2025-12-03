@@ -1,9 +1,9 @@
 diff --git a/chrome/browser/ui/views/side_panel/clash_of_gpts/clash_of_gpts_coordinator.h b/chrome/browser/ui/views/side_panel/clash_of_gpts/clash_of_gpts_coordinator.h
 new file mode 100644
-index 0000000000000..0b88423034a10
+index 0000000000000..80c7895b1e08b
 --- /dev/null
 +++ b/chrome/browser/ui/views/side_panel/clash_of_gpts/clash_of_gpts_coordinator.h
-@@ -0,0 +1,213 @@
+@@ -0,0 +1,214 @@
 +// Copyright 2025 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -17,11 +17,11 @@ index 0000000000000..0b88423034a10
 +#include <string>
 +#include <vector>
 +
++#include "base/memory/raw_ptr.h"
 +#include "base/memory/weak_ptr.h"
 +#include "base/scoped_multi_source_observation.h"
 +#include "base/scoped_observation.h"
 +#include "chrome/browser/ui/browser_list_observer.h"
-+#include "chrome/browser/ui/browser_user_data.h"
 +#include "chrome/browser/profiles/profile_observer.h"
 +#include "content/public/browser/web_contents_delegate.h"
 +#include "content/public/browser/web_contents_observer.h"
@@ -60,8 +60,7 @@ index 0000000000000..0b88423034a10
 +
 +// ClashOfGptsCoordinator manages the Clash of GPTs window with multiple WebViews
 +// for comparing LLM responses side-by-side.
-+class ClashOfGptsCoordinator : public BrowserUserData<ClashOfGptsCoordinator>,
-+                                public BrowserListObserver,
++class ClashOfGptsCoordinator : public BrowserListObserver,
 +                                public ProfileObserver,
 +                                public content::WebContentsDelegate,
 +                                public views::ViewObserver {
@@ -104,6 +103,9 @@ index 0000000000000..0b88423034a10
 +  // Sets the number of panes (2 or 3)
 +  void SetPaneCount(int count);
 +
++  // Accessor for owning browser instance.
++  Browser& GetBrowser() const;
++
 +  // Creates and registers a side panel entry
 +  void CreateAndRegisterEntry(SidePanelRegistry* registry);
 +
@@ -135,10 +137,7 @@ index 0000000000000..0b88423034a10
 +  static void RegisterProfilePrefs(user_prefs::PrefRegistrySyncable* registry);
 +
 + private:
-+  friend class BrowserUserData<ClashOfGptsCoordinator>;
 +  friend class ClashOfGptsView;
-+
-+  BROWSER_USER_DATA_KEY_DECL();
 +
 +  // Creates the window if it doesn't exist
 +  void CreateWindowIfNeeded();
@@ -209,6 +208,8 @@ index 0000000000000..0b88423034a10
 +  base::ScopedObservation<Profile, ProfileObserver>
 +      profile_observation_{this};
 +
++  raw_ptr<Browser> browser_ = nullptr;
++
 +  // Handler for unhandled keyboard events
 +  views::UnhandledKeyboardEventHandler unhandled_keyboard_event_handler_;
 +
@@ -217,4 +218,3 @@ index 0000000000000..0b88423034a10
 +};
 +
 +#endif  // CHROME_BROWSER_UI_VIEWS_SIDE_PANEL_CLASH_OF_GPTS_CLASH_OF_GPTS_COORDINATOR_H_
-\ No newline at end of file

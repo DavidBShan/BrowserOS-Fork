@@ -1,9 +1,9 @@
 diff --git a/chrome/browser/extensions/browseros_external_loader.h b/chrome/browser/extensions/browseros_external_loader.h
 new file mode 100644
-index 0000000000000..b313a0ba6fa10
+index 0000000000000..33642a2fec9ee
 --- /dev/null
 +++ b/chrome/browser/extensions/browseros_external_loader.h
-@@ -0,0 +1,126 @@
+@@ -0,0 +1,123 @@
 +// Copyright 2024 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -78,14 +78,11 @@ index 0000000000000..b313a0ba6fa10
 +                             std::unique_ptr<std::string> response_body);
 +
 +  // Parses the fetched JSON configuration and loads extensions.
-+  bool ParseConfiguration(const std::string& json_content);
++  void ParseConfiguration(const std::string& json_content);
 +
 +  // Loads configuration from a local file (for testing).
 +  void LoadFromFile();
 +
-+  // Handles the config contents read from a local file.
-+  void OnConfigFileLoaded(std::string contents);
-+  
 +  // Checks for uninstalled BrowserOS extensions and reinstalls them
 +  void ReinstallUninstalledExtensions();
 +  

@@ -1,43 +1,50 @@
-# Nxtscape Windows Release Build Configuration
+# BrowserOS Windows Release Build Configuration
+#
+# Environment Variables:
+#   Use !env tag to reference environment variables:
+#     Example: chromium_src: !env CHROMIUM_SRC
+
 build:
   type: release
-  architecture: x64 # Windows default architecture
-  # No universal builds on Windows
+  architecture: x64  # Windows builds are typically x64
 
 gn_flags:
   file: build/config/gn/flags.windows.release.gn
 
-steps:
-  clean: true
-  git_setup: true
-  apply_patches: true
-  build: true
-  sign: true # Enable signing with eSigner CKA
-  package: true
+# Explicit module execution order
+modules:
+  # Phase 1: Setup
+  - clean
+  - git_setup
 
-paths:
-  root_dir: .
-  # chromium_src: C:\Users\YourName\chromium\src
+  # Phase 2: Patches & Resources
+  - resources
+  - chromium_replace
+  - string_replaces
+  - series_patches
+  - patches
 
-# Environment-specific settings
-env:
-  PYTHONPATH: scripts
+  # Phase 3: Build
+  - configure
+  - compile
 
-# Signing configuration (using eSigner CKA certificate in Windows store)
-signing:
-  certificate_name: "FELAFAX, INC." # Your certificate subject name from SSL.com
-  # Or use environment variable:
-  # require_env_vars:
-  #   - WINDOWS_CERTIFICATE_NAME
+  # Phase 4: Sign & Package
+  - sign_windows
+  - package_windows
+
+  # Phase 5: Upload (optional)
+  - upload_gcs
+
+# Required environment variables
+# Note: CHROMIUM_SRC can be provided via --chromium-src CLI flag, YAML config, or env var
+# Note: GCS_BUCKET defaults to 'nxtscape' if not set
+# Note: GCS_SERVICE_ACCOUNT_FILE defaults to 'gclient.json' if not set
+required_envs:
+  - CODE_SIGN_TOOL_PATH         # Path to CodeSignTool directory
+  - ESIGNER_USERNAME            # SSL.com eSigner username
+  - ESIGNER_PASSWORD            # SSL.com eSigner password
+  - ESIGNER_TOTP_SECRET         # SSL.com eSigner TOTP secret
 
 # Notification settings
 notifications:
   slack: true
-
-# Build options
-build_options:
-  # Build mini_installer for creating installer package
-  build_mini_installer: true
-  # Create both installer and portable ZIP
-  create_portable: true
-  create_installer: true

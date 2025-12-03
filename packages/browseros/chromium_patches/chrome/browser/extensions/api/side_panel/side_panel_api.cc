@@ -1,5 +1,5 @@
 diff --git a/chrome/browser/extensions/api/side_panel/side_panel_api.cc b/chrome/browser/extensions/api/side_panel/side_panel_api.cc
-index 5586f29b403f0..3fd9c2ab31c7f 100644
+index f89e8095cc91f..c35f80222becb 100644
 --- a/chrome/browser/extensions/api/side_panel/side_panel_api.cc
 +++ b/chrome/browser/extensions/api/side_panel/side_panel_api.cc
 @@ -71,11 +71,11 @@ ExtensionFunction::ResponseAction SidePanelOpenFunction::RunFunction() {

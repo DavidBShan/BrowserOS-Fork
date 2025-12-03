@@ -1,5 +1,5 @@
 diff --git a/chrome/utility/importer/external_process_importer_bridge.cc b/chrome/utility/importer/external_process_importer_bridge.cc
-index 0f98b3d1da6e7..9b169aab54fd9 100644
+index 67092331c3801..25b9421391ea6 100644
 --- a/chrome/utility/importer/external_process_importer_bridge.cc
 +++ b/chrome/utility/importer/external_process_importer_bridge.cc
 @@ -135,6 +135,13 @@ void ExternalProcessImporterBridge::SetAutofillFormData(

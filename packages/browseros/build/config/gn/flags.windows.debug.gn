@@ -19,7 +19,6 @@ use_lld = true
 dcheck_always_on = true
 
 # Match macOS features exactly
-enable_reading_list = false
 enable_reporting = false
 enable_service_discovery = false
 enable_widevine = true

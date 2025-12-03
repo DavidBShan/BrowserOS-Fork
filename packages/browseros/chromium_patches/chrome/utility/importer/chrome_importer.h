@@ -1,9 +1,9 @@
 diff --git a/chrome/utility/importer/chrome_importer.h b/chrome/utility/importer/chrome_importer.h
 new file mode 100644
-index 0000000000000..25b49c7028e1c
+index 0000000000000..d4a0d85ea9c03
 --- /dev/null
 +++ b/chrome/utility/importer/chrome_importer.h
-@@ -0,0 +1,80 @@
+@@ -0,0 +1,82 @@
 +// Copyright 2023 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -25,7 +25,9 @@ index 0000000000000..25b49c7028e1c
 +#include "chrome/utility/importer/importer.h"
 +#include "components/favicon_base/favicon_usage_data.h"
 +
++namespace user_data_importer {
 +struct ImportedBookmarkEntry;
++}  // namespace user_data_importer
 +
 +namespace sql {
 +class Database;
@@ -39,7 +41,7 @@ index 0000000000000..25b49c7028e1c
 +  ChromeImporter& operator=(const ChromeImporter&) = delete;
 +
 +  // Importer:
-+  void StartImport(const importer::SourceProfile& source_profile,
++  void StartImport(const user_data_importer::SourceProfile& source_profile,
 +                   uint16_t items,
 +                   ImporterBridge* bridge) override;
 +
@@ -74,7 +76,7 @@ index 0000000000000..25b49c7028e1c
 +      const base::Value::Dict* folder,
 +      const std::vector<std::u16string>& parent_path,
 +      bool is_in_toolbar,
-+      std::vector<ImportedBookmarkEntry>* bookmarks);
++      std::vector<user_data_importer::ImportedBookmarkEntry>* bookmarks);
 +
 +  // Extracts extension IDs from Chrome preferences file
 +  std::vector<std::string> GetExtensionsFromPreferencesFile(

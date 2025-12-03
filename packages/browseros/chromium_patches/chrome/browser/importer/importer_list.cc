@@ -1,5 +1,5 @@
 diff --git a/chrome/browser/importer/importer_list.cc b/chrome/browser/importer/importer_list.cc
-index 5898c273ff443..d709456441330 100644
+index 62546b572bab8..072d2d89ee990 100644
 --- a/chrome/browser/importer/importer_list.cc
 +++ b/chrome/browser/importer/importer_list.cc
 @@ -6,10 +6,15 @@
@@ -19,8 +19,8 @@ index 5898c273ff443..d709456441330 100644
  #include "chrome/browser/shell_integration.h"
  #include "chrome/common/importer/firefox_importer_utils.h"
 @@ -17,6 +22,7 @@
- #include "chrome/common/importer/importer_data_types.h"
  #include "chrome/grit/generated_resources.h"
+ #include "components/user_data_importer/common/importer_data_types.h"
  #include "ui/base/l10n/l10n_util.h"
 +#include "base/logging.h"
  
@@ -44,7 +44,7 @@ index 5898c273ff443..d709456441330 100644
 +  }
 +
 +  std::optional<base::Value::Dict> preferences =
-+      base::JSONReader::ReadDict(preferences_content);
++      base::JSONReader::ReadDict(preferences_content, base::JSON_PARSE_CHROMIUM_EXTENSIONS);
 +  if (!preferences) {
 +    LOG(INFO) << "browseros: Failed to parse preferences file as JSON: " << preferences_path.AsUTF8Unsafe();
 +    return false;
@@ -93,7 +93,7 @@ index 5898c273ff443..d709456441330 100644
 +
 +bool ChromeImporterCanImport(const base::FilePath& profile_path, uint16_t* services) {
 +  DCHECK(services);
-+  *services = importer::NONE;
++  *services = user_data_importer::NONE;
 +
 +  if (!base::PathExists(profile_path))
 +    return false;
@@ -105,27 +105,27 @@ index 5898c273ff443..d709456441330 100644
 +  base::FilePath secure_preferences_path = profile_path.Append(FILE_PATH_LITERAL("Secure Preferences"));
 +
 +  if (base::PathExists(bookmarks_path))
-+    *services |= importer::FAVORITES;
++    *services |= user_data_importer::FAVORITES;
 +
 +  if (base::PathExists(history_path))
-+    *services |= importer::HISTORY;
++    *services |= user_data_importer::HISTORY;
 +
 +  if (base::PathExists(passwords_path))
-+    *services |= importer::PASSWORDS;
++    *services |= user_data_importer::PASSWORDS;
 +
 +  if (base::PathExists(preferences_path)) {
-+    *services |= importer::AUTOFILL_FORM_DATA;
-+    *services |= importer::SEARCH_ENGINES;
++    *services |= user_data_importer::AUTOFILL_FORM_DATA;
++    *services |= user_data_importer::SEARCH_ENGINES;
 +
 +    // Check for extensions in preferences
 +    if (HasExtensionsToImport(preferences_path) ||
 +        (base::PathExists(secure_preferences_path) &&
 +         HasExtensionsToImport(secure_preferences_path))) {
-+      *services |= importer::EXTENSIONS;
++      *services |= user_data_importer::EXTENSIONS;
 +    }
 +  }
 +
-+  return *services != importer::NONE;
++  return *services != user_data_importer::NONE;
 +}
 +
 +base::Value::List GetChromeSourceProfiles(const base::FilePath& local_state_path) {
@@ -138,7 +138,7 @@ index 5898c273ff443..d709456441330 100644
 +    }
 +
 +    std::optional<base::Value::Dict> local_state_dict =
-+        base::JSONReader::ReadDict(local_state_content);
++        base::JSONReader::ReadDict(local_state_content, base::JSON_PARSE_CHROMIUM_EXTENSIONS);
 +
 +    if (local_state_dict) {
 +      const auto* profile_dict = local_state_dict->FindDict("profile");
@@ -175,7 +175,7 @@ index 5898c273ff443..d709456441330 100644
 +  return profiles;
 +}
 +
-+void DetectChromeProfiles(std::vector<importer::SourceProfile>* profiles) {
++void DetectChromeProfiles(std::vector<user_data_importer::SourceProfile>* profiles) {
 +  base::ScopedBlockingCall scoped_blocking_call(FROM_HERE,
 +                                               base::BlockingType::MAY_BLOCK);
 +
@@ -201,19 +201,19 @@ index 5898c273ff443..d709456441330 100644
 +
 +    base::FilePath profile_folder = chrome_path.Append(
 +        base::FilePath::StringType(profile_id->begin(), profile_id->end()));
-+    uint16_t services = importer::NONE;
++    uint16_t services = user_data_importer::NONE;
 +
 +    if (!ChromeImporterCanImport(profile_folder, &services))
 +      continue;
 +
-+    importer::SourceProfile chrome;
++    user_data_importer::SourceProfile chrome;
 +    if (*profile_id == "Default") {
 +      chrome.importer_name = l10n_util::GetStringUTF16(IDS_IMPORT_FROM_CHROME);
 +    } else {
 +      chrome.importer_name = l10n_util::GetStringUTF16(IDS_IMPORT_FROM_CHROME) +
 +                            u" - " + base::UTF8ToUTF16(*name);
 +    }
-+    chrome.importer_type = importer::TYPE_CHROME;
++    chrome.importer_type = user_data_importer::TYPE_CHROME;
 +    chrome.services_supported = services;
 +    chrome.source_path = profile_folder;
 +    profiles->push_back(chrome);
@@ -221,9 +221,9 @@ index 5898c273ff443..d709456441330 100644
 +}
 +
  #if BUILDFLAG(IS_WIN)
- void DetectIEProfiles(std::vector<importer::SourceProfile>* profiles) {
-   base::ScopedBlockingCall scoped_blocking_call(FROM_HERE,
-@@ -67,6 +263,21 @@ void DetectBuiltinWindowsProfiles(
+ void DetectIEProfiles(
+     std::vector<user_data_importer::SourceProfile>* profiles) {
+@@ -71,6 +267,21 @@ void DetectBuiltinWindowsProfiles(
  
  #endif  // BUILDFLAG(IS_WIN)
  
@@ -243,9 +243,9 @@ index 5898c273ff443..d709456441330 100644
 +#endif  // BUILDFLAG(IS_WIN)
 +
  #if BUILDFLAG(IS_MAC)
- void DetectSafariProfiles(std::vector<importer::SourceProfile>* profiles) {
-   base::ScopedBlockingCall scoped_blocking_call(FROM_HERE,
-@@ -83,8 +294,30 @@ void DetectSafariProfiles(std::vector<importer::SourceProfile>* profiles) {
+ void DetectSafariProfiles(
+     std::vector<user_data_importer::SourceProfile>* profiles) {
+@@ -88,8 +299,30 @@ void DetectSafariProfiles(
    safari.services_supported = items;
    profiles->push_back(safari);
  }
@@ -276,7 +276,7 @@ index 5898c273ff443..d709456441330 100644
  // |locale|: The application locale used for lookups in Firefox's
  // locale-specific search engines feature (see firefox_importer.cc for
  // details).
-@@ -163,8 +396,10 @@ std::vector<importer::SourceProfile> DetectSourceProfilesWorker(
+@@ -170,8 +403,10 @@ std::vector<user_data_importer::SourceProfile> DetectSourceProfilesWorker(
  #if BUILDFLAG(IS_WIN)
    if (shell_integration::IsFirefoxDefaultBrowser()) {
      DetectFirefoxProfiles(locale, &profiles);
@@ -287,7 +287,7 @@ index 5898c273ff443..d709456441330 100644
      DetectBuiltinWindowsProfiles(&profiles);
      DetectFirefoxProfiles(locale, &profiles);
    }
-@@ -172,11 +407,15 @@ std::vector<importer::SourceProfile> DetectSourceProfilesWorker(
+@@ -179,11 +414,15 @@ std::vector<user_data_importer::SourceProfile> DetectSourceProfilesWorker(
    if (shell_integration::IsFirefoxDefaultBrowser()) {
      DetectFirefoxProfiles(locale, &profiles);
      DetectSafariProfiles(&profiles);

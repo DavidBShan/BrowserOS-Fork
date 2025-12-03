@@ -1,6 +1,6 @@
 diff --git a/chrome/browser/extensions/api/browser_os/browser_os_change_detector.h b/chrome/browser/extensions/api/browser_os/browser_os_change_detector.h
 new file mode 100644
-index 0000000000000..b3287913fd5ac
+index 0000000000000..a45117498c829
 --- /dev/null
 +++ b/chrome/browser/extensions/api/browser_os/browser_os_change_detector.h
 @@ -0,0 +1,108 @@
@@ -76,7 +76,7 @@ index 0000000000000..b3287913fd5ac
 +  void DOMContentLoaded(
 +      content::RenderFrameHost* render_frame_host) override;
 +  void OnFocusChangedInPage(
-+      content::FocusedNodeDetails* details) override;
++      const content::FocusedNodeDetails& details) override;
 +  void DidOpenRequestedURL(
 +      content::WebContents* new_contents,
 +      content::RenderFrameHost* source_render_frame_host,

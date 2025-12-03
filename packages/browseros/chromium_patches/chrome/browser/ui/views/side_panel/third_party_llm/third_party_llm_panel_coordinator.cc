@@ -1,9 +1,9 @@
 diff --git a/chrome/browser/ui/views/side_panel/third_party_llm/third_party_llm_panel_coordinator.cc b/chrome/browser/ui/views/side_panel/third_party_llm/third_party_llm_panel_coordinator.cc
 new file mode 100644
-index 0000000000000..77cb397565a2d
+index 0000000000000..f8e61ae5325b9
 --- /dev/null
 +++ b/chrome/browser/ui/views/side_panel/third_party_llm/third_party_llm_panel_coordinator.cc
-@@ -0,0 +1,1068 @@
+@@ -0,0 +1,1157 @@
 +// Copyright 2024 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -13,11 +13,12 @@ index 0000000000000..77cb397565a2d
 +#include <memory>
 +#include <vector>
 +
++#include "base/check.h"
++#include "base/check_deref.h"
 +#include "base/functional/callback.h"
 +#include "ui/views/controls/menu/menu_runner.h"
 +#include "ui/base/mojom/menu_source_type.mojom.h"
 +#include "chrome/browser/ui/views/side_panel/third_party_llm/third_party_llm_view.h"
-+#include "chrome/browser/ui/views/side_panel/browseros_simple_page_extractor.h"
 +#include "base/strings/utf_string_conversions.h"
 +#include "chrome/browser/profiles/profile.h"
 +#include "chrome/browser/ui/browser.h"
@@ -54,7 +55,6 @@ index 0000000000000..77cb397565a2d
 +#include "ui/accessibility/ax_node.h"
 +#include "ui/accessibility/ax_node_data.h"
 +#include "ui/accessibility/ax_enums.mojom.h"
-+#include "ui/accessibility/ax_role_properties.h"
 +#include "ui/accessibility/ax_tree_update.h"
 +#include "ui/base/clipboard/clipboard.h"
 +#include "ui/base/clipboard/scoped_clipboard_writer.h"
@@ -75,6 +75,7 @@ index 0000000000000..77cb397565a2d
 +#include "third_party/blink/public/common/mediastream/media_stream_request.h"
 +#include "content/public/browser/render_frame_host.h"
 +#include "components/metrics/browseros_metrics/browseros_metrics.h"
++#include "chrome/browser/ui/views/side_panel/clash_of_gpts/clash_of_gpts_coordinator.h"
 +
 +namespace {
 +
@@ -107,12 +108,15 @@ index 0000000000000..77cb397565a2d
 +
 +}  // namespace
 +
-+ThirdPartyLlmPanelCoordinator::ThirdPartyLlmPanelCoordinator(Browser* browser)
-+    : BrowserUserData<ThirdPartyLlmPanelCoordinator>(*browser),
++ThirdPartyLlmPanelCoordinator::ThirdPartyLlmPanelCoordinator(
++    Profile* profile,
++    TabStripModel* tab_strip_model)
++    : profile_(CHECK_DEREF(profile)),
++      tab_strip_model_(CHECK_DEREF(tab_strip_model)),
 +      feedback_timer_(std::make_unique<base::OneShotTimer>()) {
 +  // Register for early cleanup notifications
 +  browser_list_observation_.Observe(BrowserList::GetInstance());
-+  profile_observation_.Observe(browser->profile());
++  profile_observation_.Observe(&profile_.get());
 +
 +  // Load providers from preferences
 +  LoadProvidersFromPrefs();
@@ -126,10 +130,11 @@ index 0000000000000..77cb397565a2d
 +void ThirdPartyLlmPanelCoordinator::CreateAndRegisterEntry(
 +    SidePanelRegistry* global_registry) {
 +  auto entry = std::make_unique<SidePanelEntry>(
-+      SidePanelEntry::Id::kThirdPartyLlm,
++      SidePanelEntry::Key(SidePanelEntry::Id::kThirdPartyLlm),
 +      base::BindRepeating(
 +          &ThirdPartyLlmPanelCoordinator::CreateThirdPartyLlmWebView,
-+          base::Unretained(this)));
++          base::Unretained(this)),
++      base::RepeatingCallback<int()>());
 +  
 +  global_registry->Register(std::move(entry));
 +}
@@ -155,7 +160,7 @@ index 0000000000000..77cb397565a2d
 +    LOG(INFO) << "[browseros] Provider list size changed from " << previous_size
 +              << " to " << providers_.size() << ", resetting to first provider";
 +    current_provider_index_ = 0;
-+    if (PrefService* prefs = GetBrowser().profile()->GetPrefs()) {
++    if (PrefService* prefs = GetProfile()->GetPrefs()) {
 +      prefs->SetInteger(kThirdPartyLlmSelectedProviderPref, 0);
 +    }
 +  }
@@ -299,7 +304,7 @@ index 0000000000000..77cb397565a2d
 +  
 +  // Create WebView
 +  web_view_ = container->AddChildView(
-+      std::make_unique<views::WebView>(GetBrowser().profile()));
++      std::make_unique<views::WebView>(GetProfile()));
 +  web_view_->SetProperty(
 +      views::kFlexBehaviorKey,
 +      views::FlexSpecification(views::MinimumFlexSizeRule::kScaleToZero,
@@ -310,7 +315,7 @@ index 0000000000000..77cb397565a2d
 +  
 +  // Create WebContents if we don't have one yet
 +  if (!owned_web_contents_) {
-+    content::WebContents::CreateParams params(GetBrowser().profile());
++    content::WebContents::CreateParams params(GetProfile());
 +    owned_web_contents_ = content::WebContents::Create(params);
 +
 +    // Set this as the delegate to handle keyboard events
@@ -401,7 +406,7 @@ index 0000000000000..77cb397565a2d
 +}
 +
 +void ThirdPartyLlmPanelCoordinator::LoadProvidersFromPrefs() {
-+  PrefService* prefs = GetBrowser().profile()->GetPrefs();
++  PrefService* prefs = GetProfile()->GetPrefs();
 +  if (!prefs) {
 +    LOG(ERROR) << "[browseros] Failed to get PrefService";
 +    providers_ = GetDefaultProviders();
@@ -462,7 +467,7 @@ index 0000000000000..77cb397565a2d
 +}
 +
 +void ThirdPartyLlmPanelCoordinator::SaveProvidersToPrefs() {
-+  PrefService* prefs = GetBrowser().profile()->GetPrefs();
++  PrefService* prefs = GetProfile()->GetPrefs();
 +  if (!prefs) {
 +    LOG(ERROR) << "[browseros] Failed to get PrefService for saving";
 +    return;
@@ -504,7 +509,7 @@ index 0000000000000..77cb397565a2d
 +  current_provider_index_ = new_provider_index;
 +
 +  // Persist preference.
-+  if (PrefService* prefs = GetBrowser().profile()->GetPrefs()) {
++  if (PrefService* prefs = GetProfile()->GetPrefs()) {
 +    prefs->SetInteger(kThirdPartyLlmSelectedProviderPref, static_cast<int>(current_provider_index_));
 +  }
 +
@@ -546,21 +551,28 @@ index 0000000000000..77cb397565a2d
 +  if (!owned_web_contents_) {
 +    return;
 +  }
-+  
++
 +  GURL current_url = owned_web_contents_->GetURL();
 +  if (!current_url.is_valid()) {
 +    return;
 +  }
-+  
-+  // Open the current URL in a new tab
-+  NavigateParams params(&GetBrowser(), current_url, ui::PAGE_TRANSITION_LINK);
-+  params.disposition = WindowOpenDisposition::NEW_FOREGROUND_TAB;
-+  Navigate(&params);
++
++  // Create new WebContents and navigate to the URL
++  content::WebContents::CreateParams params(GetProfile());
++  std::unique_ptr<content::WebContents> new_contents =
++      content::WebContents::Create(params);
++  new_contents->GetController().LoadURL(
++      current_url, content::Referrer(), ui::PAGE_TRANSITION_LINK, std::string());
++
++  // Add to tab strip
++  GetTabStripModel()->AddWebContents(
++      std::move(new_contents), -1,
++      ui::PAGE_TRANSITION_LINK, AddTabTypes::ADD_ACTIVE);
 +}
 +
 +void ThirdPartyLlmPanelCoordinator::OnCopyContent() {
 +  // Get the active tab's web contents
-+  TabStripModel* tab_strip_model = GetBrowser().tab_strip_model();
++  TabStripModel* tab_strip_model = GetTabStripModel();
 +  if (!tab_strip_model) {
 +    return;
 +  }
@@ -586,7 +598,7 @@ index 0000000000000..77cb397565a2d
 +
 +void ThirdPartyLlmPanelCoordinator::OnScreenshotContent() {
 +  // Get the active tab's web contents
-+  TabStripModel* tab_strip_model = GetBrowser().tab_strip_model();
++  TabStripModel* tab_strip_model = GetTabStripModel();
 +  if (!tab_strip_model) {
 +    return;
 +  }
@@ -662,48 +674,61 @@ index 0000000000000..77cb397565a2d
 +
 +void ThirdPartyLlmPanelCoordinator::OnAccessibilityTreeReceived(
 +    ui::AXTreeUpdate& update) {
-+  // Use the BrowserOS simple page extractor
-+  std::u16string extracted_text = side_panel::BrowserOSSimplePageExtractor::ExtractStructuredText(update);
-+
-+  // Check if we actually got content
-+  if (extracted_text.empty()) {
-+    LOG(WARNING) << "[browseros] No content extracted from accessibility tree";
-+    extracted_text = u"(No readable content found on this page)";
++  // Build a map of node IDs to node data for easy lookup
++  std::map<ui::AXNodeID, const ui::AXNodeData*> node_map;
++  for (const auto& node_data : update.nodes) {
++    node_map[node_data.id] = &node_data;
 +  }
-+
-+  // Format the final output for LLM consumption
-+  std::u16string formatted_output = u"----------- WEB PAGE -----------\n\n";
-+  formatted_output += u"TITLE: " + page_title_ + u"\n\n";
-+  formatted_output += u"URL: " + base::UTF8ToUTF16(page_url_.spec()) + u"\n\n";
-+  formatted_output += u"CONTENT:\n\n";
-+  formatted_output += extracted_text;
-+  formatted_output += u"\n\n------------------------------------\n\n";
-+  formatted_output += u"USER PROMPT:\n\n";
-+
-+  // Copy to clipboard
-+  ui::ScopedClipboardWriter clipboard_writer(ui::ClipboardBuffer::kCopyPaste);
-+  clipboard_writer.WriteText(formatted_output);
-+
-+  browseros_metrics::BrowserOSMetrics::Log("llmchat.content.copied");
-+
-+  // Show feedback message
-+  if (copy_feedback_label_) {
-+    copy_feedback_label_->SetText(u"Page content copied to clipboard");
-+    copy_feedback_label_->SetVisible(true);
-+
-+    // Cancel any existing timer
-+    if (feedback_timer_->IsRunning()) {
-+      feedback_timer_->Stop();
++  
++  // Find the root node
++  ui::AXNodeID root_id = update.root_id;
++  if (node_map.find(root_id) == node_map.end()) {
++    LOG(ERROR) << "Root node not found in tree update";
++    return;
++  }
++  
++  // Extract text from the accessibility tree recursively
++  std::u16string extracted_text;
++  ExtractTextFromNodeData(node_map[root_id], node_map, &extracted_text);
++  
++  // Clean up text - remove excessive whitespace
++  if (!extracted_text.empty()) {
++    // Simple cleanup of multiple spaces
++    size_t pos = 0;
++    while ((pos = extracted_text.find(u"  ", pos)) != std::u16string::npos) {
++      extracted_text.replace(pos, 2, u" ");
 +    }
++    
++    // Format the final output
++    std::u16string formatted_output = u"----------- WEB PAGE -----------\n\n";
++    formatted_output += u"TITLE: " + page_title_ + u"\n\n";
++    formatted_output += u"URL: " + base::UTF8ToUTF16(page_url_.spec()) + u"\n\n";
++    formatted_output += u"CONTENT:\n\n" + extracted_text;
++    formatted_output += u" ------------------------------------\n\n";
++    formatted_output += u"USER PROMPT:\n\n";
++    
++    // Copy to clipboard
++    ui::ScopedClipboardWriter clipboard_writer(ui::ClipboardBuffer::kCopyPaste);
++    clipboard_writer.WriteText(formatted_output);
++    
++    browseros_metrics::BrowserOSMetrics::Log("llmchat.content.copied");
++    
++    // Show feedback message
++    if (copy_feedback_label_) {
++      copy_feedback_label_->SetText(u"Content copied to clipboard");
++      copy_feedback_label_->SetVisible(true);
 +
-+    // Start timer to hide message after 2.5 seconds
-+    feedback_timer_->Start(FROM_HERE, base::Seconds(2.5),
-+        base::BindOnce(&ThirdPartyLlmPanelCoordinator::HideFeedbackLabel,
-+                       weak_factory_.GetWeakPtr()));
++      // Cancel any existing timer
++      if (feedback_timer_->IsRunning()) {
++        feedback_timer_->Stop();
++      }
++
++      // Start timer to hide message after 2.5 seconds
++      feedback_timer_->Start(FROM_HERE, base::Seconds(2.5),
++          base::BindOnce(&ThirdPartyLlmPanelCoordinator::HideFeedbackLabel,
++                         weak_factory_.GetWeakPtr()));
++    }
 +  }
-+
-+  LOG(INFO) << "[browseros] Extracted " << extracted_text.length()
-+            << " characters of structured text";
 +}
 +
 +void ThirdPartyLlmPanelCoordinator::HideFeedbackLabel() {
@@ -744,6 +769,92 @@ index 0000000000000..77cb397565a2d
 +  view_observation_.RemoveObservation(observed_view);
 +}
 +
++
++void ThirdPartyLlmPanelCoordinator::ExtractTextFromNodeData(
++    const ui::AXNodeData* node,
++    const std::map<ui::AXNodeID, const ui::AXNodeData*>& node_map,
++    std::u16string* output) {
++  if (!node || !output) {
++    return;
++  }
++  
++  // Skip UI elements and navigation
++  if (node->role == ax::mojom::Role::kButton ||
++      node->role == ax::mojom::Role::kNavigation ||
++      node->role == ax::mojom::Role::kBanner ||
++      node->role == ax::mojom::Role::kComplementary ||
++      node->role == ax::mojom::Role::kContentInfo ||
++      node->role == ax::mojom::Role::kForm ||
++      node->role == ax::mojom::Role::kSearch ||
++      node->role == ax::mojom::Role::kMenu ||
++      node->role == ax::mojom::Role::kMenuBar ||
++      node->role == ax::mojom::Role::kMenuItem ||
++      node->role == ax::mojom::Role::kToolbar) {
++    // For these elements, still traverse children but don't extract their text
++    for (ui::AXNodeID child_id : node->child_ids) {
++      auto it = node_map.find(child_id);
++      if (it != node_map.end()) {
++        ExtractTextFromNodeData(it->second, node_map, output);
++      }
++    }
++    return;
++  }
++  
++  // Check if this is a text-containing element
++  bool is_text_element = (node->role == ax::mojom::Role::kStaticText ||
++                         node->role == ax::mojom::Role::kInlineTextBox);
++  
++  // Extract text if this is a text element
++  if (is_text_element) {
++    std::u16string text;
++    if (node->HasStringAttribute(ax::mojom::StringAttribute::kName)) {
++      text = node->GetString16Attribute(ax::mojom::StringAttribute::kName);
++    }
++    
++    if (text.empty() && node->HasStringAttribute(ax::mojom::StringAttribute::kValue)) {
++      text = node->GetString16Attribute(ax::mojom::StringAttribute::kValue);
++    }
++    
++    if (!text.empty()) {
++      // Add appropriate spacing
++      if (!output->empty() && output->back() != ' ' && output->back() != '\n') {
++        *output += u" ";
++      }
++      *output += text;
++    }
++  }
++  
++  // Handle line breaks
++  if (node->role == ax::mojom::Role::kLineBreak) {
++    *output += u"\n";
++  }
++  
++  // Add paragraph breaks for block-level elements
++  bool needs_paragraph_break = (node->role == ax::mojom::Role::kParagraph ||
++                               node->role == ax::mojom::Role::kHeading ||
++                               node->role == ax::mojom::Role::kListItem ||
++                               node->role == ax::mojom::Role::kBlockquote ||
++                               node->role == ax::mojom::Role::kArticle ||
++                               node->role == ax::mojom::Role::kSection);
++  
++  if (needs_paragraph_break && !output->empty() && output->back() != '\n') {
++    *output += u"\n\n";
++  }
++  
++  // Recursively process children for all elements
++  for (ui::AXNodeID child_id : node->child_ids) {
++    auto it = node_map.find(child_id);
++    if (it != node_map.end()) {
++      ExtractTextFromNodeData(it->second, node_map, output);
++    }
++  }
++  
++  // Add paragraph break after block-level elements if they had content
++  if (needs_paragraph_break && !output->empty() && output->back() != '\n') {
++    *output += u"\n\n";
++  }
++}
++
 +bool ThirdPartyLlmPanelCoordinator::HandleKeyboardEvent(
 +    content::WebContents* source,
 +    const input::NativeWebKeyboardEvent& event) {
@@ -764,9 +875,6 @@ index 0000000000000..77cb397565a2d
 +    const blink::mojom::WindowFeatures& window_features,
 +    bool user_gesture,
 +    bool* was_blocked) {
-+  // Handle popup windows from the webview
-+  Browser* browser = &GetBrowser();
-+  
 +  // Only allow popups triggered by user gesture
 +  if (!user_gesture) {
 +    if (was_blocked) {
@@ -774,16 +882,19 @@ index 0000000000000..77cb397565a2d
 +    }
 +    return nullptr;
 +  }
-+  
-+  // For popup windows and new tabs, open them in the main browser
++
++  // For popup windows and new tabs, add to the tab strip
 +  if (disposition == WindowOpenDisposition::NEW_POPUP ||
 +      disposition == WindowOpenDisposition::NEW_FOREGROUND_TAB ||
 +      disposition == WindowOpenDisposition::NEW_BACKGROUND_TAB ||
 +      disposition == WindowOpenDisposition::NEW_WINDOW) {
-+    chrome::AddWebContents(browser, source, std::move(new_contents), 
-+                          target_url, disposition, window_features);
++    int add_types = (disposition == WindowOpenDisposition::NEW_FOREGROUND_TAB)
++                        ? AddTabTypes::ADD_ACTIVE
++                        : AddTabTypes::ADD_NONE;
++    GetTabStripModel()->AddWebContents(
++        std::move(new_contents), -1, ui::PAGE_TRANSITION_LINK, add_types);
 +  }
-+  
++
 +  return nullptr;
 +}
 +
@@ -895,11 +1006,8 @@ index 0000000000000..77cb397565a2d
 +  if (provider_change_in_progress_)
 +    return;
 +
-+  // Check if the third-party LLM panel is open
-+  auto* side_panel_ui = GetBrowser().GetFeatures().side_panel_ui();
-+  if (!side_panel_ui || 
-+      !side_panel_ui->IsSidePanelShowing() ||
-+      side_panel_ui->GetCurrentEntryId() != SidePanelEntry::Id::kThirdPartyLlm) {
++  // Only cycle if the panel is showing (provider_selector_ exists when panel is open)
++  if (!provider_selector_) {
 +    return;
 +  }
 +
@@ -910,35 +1018,12 @@ index 0000000000000..77cb397565a2d
 +  // Calculate next provider (cycle through all providers)
 +  size_t next_provider_index = (current_provider_index_ + 1) % providers_.size();
 +
-+  // Update the provider selector if it exists
-+  if (provider_selector_) {
-+    // Combobox selection changes made programmatically do NOT invoke the
-+    // `SetCallback` observer, so we must call `OnProviderChanged()` manually
-+    // to keep the page in sync with the visible provider label.
-+    provider_selector_->SetSelectedIndex(next_provider_index);
-+    OnProviderChanged();
-+    return;
-+  } else {
-+    // If the UI isn't created yet, update everything manually
-+    current_provider_index_ = next_provider_index;
-+
-+    // Save preference
-+    PrefService* prefs = GetBrowser().profile()->GetPrefs();
-+    if (prefs) {
-+      prefs->SetInteger(kThirdPartyLlmSelectedProviderPref,
-+                        static_cast<int>(next_provider_index));
-+    }
-+
-+    // Navigate to the new provider URL if we have WebContents
-+    if (owned_web_contents_ && next_provider_index < providers_.size()) {
-+      GURL provider_url = providers_[next_provider_index].url;
-+      owned_web_contents_->GetController().LoadURL(
-+          provider_url,
-+          content::Referrer(),
-+          ui::PAGE_TRANSITION_AUTO_TOPLEVEL,
-+          std::string());
-+    }
-+  }
++  // Update the provider selector
++  // Combobox selection changes made programmatically do NOT invoke the
++  // `SetCallback` observer, so we must call `OnProviderChanged()` manually
++  // to keep the page in sync with the visible provider label.
++  provider_selector_->SetSelectedIndex(next_provider_index);
++  OnProviderChanged();
 +  
 +  // Removed provider change notification to prevent crash
 +}
@@ -968,14 +1053,15 @@ index 0000000000000..77cb397565a2d
 +}
 +
 +void ThirdPartyLlmPanelCoordinator::OnBrowserRemoved(Browser* browser) {
-+  if (browser == &GetBrowser()) {
-+    // Browser is being removed - clean up WebContents early
++  // Clean up WebContents when any browser is removed to be safe
++  // Since we no longer track the specific browser, clean up if profile matches
++  if (browser && browser->profile() == GetProfile()) {
 +    CleanupWebContents();
 +  }
 +}
 +
 +void ThirdPartyLlmPanelCoordinator::OnProfileWillBeDestroyed(Profile* profile) {
-+  if (profile == GetBrowser().profile()) {
++  if (profile == GetProfile()) {
 +    // Profile is being destroyed - clean up WebContents if not already done
 +    CleanupWebContents();
 +  }
@@ -1059,7 +1145,12 @@ index 0000000000000..77cb397565a2d
 +      OnOpenInNewTab();
 +      break;
 +    case IDC_CLASH_OF_GPTS:
-+      chrome::ExecuteCommand(&GetBrowser(), IDC_OPEN_CLASH_OF_GPTS);
++      if (Browser* browser = BrowserList::GetInstance()->GetLastActive()) {
++        if (auto* coordinator =
++                browser->browser_window_features()->clash_of_gpts_coordinator()) {
++          coordinator->Show();
++        }
++      }
 +      break;
 +  }
 +}
@@ -1070,5 +1161,3 @@ index 0000000000000..77cb397565a2d
 +  registry->RegisterListPref(kThirdPartyLlmProvidersPref);
 +  registry->RegisterIntegerPref(kThirdPartyLlmSelectedProviderPref, 0);
 +}
-+
-+BROWSER_USER_DATA_KEY_IMPL(ThirdPartyLlmPanelCoordinator);

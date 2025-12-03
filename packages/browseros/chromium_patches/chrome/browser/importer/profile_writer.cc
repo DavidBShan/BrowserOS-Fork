@@ -1,11 +1,11 @@
 diff --git a/chrome/browser/importer/profile_writer.cc b/chrome/browser/importer/profile_writer.cc
-index 7bb741920d9af..3e64195089866 100644
+index 6edb974687c07..6bc8b7f9e43cb 100644
 --- a/chrome/browser/importer/profile_writer.cc
 +++ b/chrome/browser/importer/profile_writer.cc
-@@ -36,6 +36,18 @@
- #include "components/prefs/pref_service.h"
+@@ -37,6 +37,18 @@
  #include "components/search_engines/template_url.h"
  #include "components/search_engines/template_url_service.h"
+ #include "components/user_data_importer/common/imported_bookmark_entry.h"
 +#include "chrome/browser/extensions/extension_service.h"
 +#include "extensions/browser/extension_system.h"
 +#include "extensions/common/extension.h"
@@ -21,7 +21,7 @@ index 7bb741920d9af..3e64195089866 100644
  
  using bookmarks::BookmarkModel;
  using bookmarks::BookmarkNode;
-@@ -74,6 +86,22 @@ void ShowBookmarkBar(Profile* profile) {
+@@ -75,6 +87,22 @@ void ShowBookmarkBar(Profile* profile) {
    profile->GetPrefs()->SetBoolean(bookmarks::prefs::kShowBookmarkBar, true);
  }
  
@@ -44,7 +44,7 @@ index 7bb741920d9af..3e64195089866 100644
  }  // namespace
  
  ProfileWriter::ProfileWriter(Profile* profile) : profile_(profile) {}
-@@ -337,3 +365,119 @@ void ProfileWriter::AddAutocompleteFormDataEntries(
+@@ -338,3 +366,119 @@ void ProfileWriter::AddAutocompleteFormDataEntries(
  }
  
  ProfileWriter::~ProfileWriter() = default;

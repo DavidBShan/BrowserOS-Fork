@@ -1,9 +1,9 @@
 diff --git a/chrome/browser/resources/settings/browseros_prefs_page/browseros_prefs_page.ts b/chrome/browser/resources/settings/browseros_prefs_page/browseros_prefs_page.ts
 new file mode 100644
-index 0000000000000..2616c77cc001b
+index 0000000000000..463bbed53b5b3
 --- /dev/null
 +++ b/chrome/browser/resources/settings/browseros_prefs_page/browseros_prefs_page.ts
-@@ -0,0 +1,250 @@
+@@ -0,0 +1,249 @@
 +// Copyright 2025 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -13,7 +13,6 @@ index 0000000000000..2616c77cc001b
 + */
 +
 +import '../settings_page/settings_section.js';
-+import '../settings_page_styles.css.js';
 +import '../settings_shared.css.js';
 +import '../controls/settings_toggle_button.js';
 +import 'chrome://resources/cr_elements/cr_button/cr_button.js';

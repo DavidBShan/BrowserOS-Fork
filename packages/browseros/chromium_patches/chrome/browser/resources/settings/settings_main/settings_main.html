@@ -1,20 +1,39 @@
 diff --git a/chrome/browser/resources/settings/settings_main/settings_main.html b/chrome/browser/resources/settings/settings_main/settings_main.html
-index 329e9552760de..b0c5e71a428ad 100644
+index e91a42678789f..defdc535cdeeb 100644
 --- a/chrome/browser/resources/settings/settings_main/settings_main.html
 +++ b/chrome/browser/resources/settings/settings_main/settings_main.html
-@@ -49,3 +49,15 @@
-           prefs="{{prefs}}">
+@@ -228,4 +228,34 @@
        </settings-about-page>
      </template>
-+    <template is="dom-if" if="[[showPages_.nxtscape]]">
+   </div>
++
++  <div slot="view" id="nxtscape">
++    <template is="dom-if" if="[[renderPlugin_(
++        routes_.NXTSCAPE, lastRoute_, inSearchMode_)]]">
 +      <settings-nxtscape-page role="main"
 +          class="cr-centered-card-container"
 +          prefs="{{prefs}}">
 +      </settings-nxtscape-page>
 +    </template>
-+    <template is="dom-if" if="[[showPages_.browserosPrefs]]">
++  </div>
++
++  <div slot="view" id="browseros">
++    <template is="dom-if" if="[[renderPlugin_(
++        routes_.BROWSEROS, lastRoute_, inSearchMode_)]]">
++      <settings-browseros-page role="main"
++          class="cr-centered-card-container"
++          prefs="{{prefs}}">
++      </settings-browseros-page>
++    </template>
++  </div>
++
++  <div slot="view" id="browserosPrefs">
++    <template is="dom-if" if="[[renderPlugin_(
++        routes_.BROWSEROS_PREFS, lastRoute_, inSearchMode_)]]">
 +      <settings-browseros-prefs-page role="main"
 +          class="cr-centered-card-container"
 +          prefs="{{prefs}}">
 +      </settings-browseros-prefs-page>
 +    </template>
++  </div>
+ </cr-view-manager>

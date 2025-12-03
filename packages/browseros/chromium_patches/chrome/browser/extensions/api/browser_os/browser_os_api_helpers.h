@@ -1,9 +1,9 @@
 diff --git a/chrome/browser/extensions/api/browser_os/browser_os_api_helpers.h b/chrome/browser/extensions/api/browser_os/browser_os_api_helpers.h
 new file mode 100644
-index 0000000000000..1b12c66835998
+index 0000000000000..2000fa3235290
 --- /dev/null
 +++ b/chrome/browser/extensions/api/browser_os/browser_os_api_helpers.h
-@@ -0,0 +1,136 @@
+@@ -0,0 +1,137 @@
 +// Copyright 2024 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -12,6 +12,7 @@ index 0000000000000..1b12c66835998
 +#define CHROME_BROWSER_EXTENSIONS_API_BROWSER_OS_BROWSER_OS_API_HELPERS_H_
 +
 +#include <string>
++#include <unordered_map>
 +
 +#include "base/functional/callback.h"
 +#include "ui/gfx/geometry/point_f.h"

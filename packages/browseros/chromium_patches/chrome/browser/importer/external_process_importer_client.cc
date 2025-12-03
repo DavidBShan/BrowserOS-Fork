@@ -1,8 +1,8 @@
 diff --git a/chrome/browser/importer/external_process_importer_client.cc b/chrome/browser/importer/external_process_importer_client.cc
-index 73abe33857e1a..f660f3ebaf351 100644
+index 6ee7a959fde3e..705f24f133755 100644
 --- a/chrome/browser/importer/external_process_importer_client.cc
 +++ b/chrome/browser/importer/external_process_importer_client.cc
-@@ -249,6 +249,14 @@ void ExternalProcessImporterClient::OnAutofillFormDataImportGroup(
+@@ -251,6 +251,14 @@ void ExternalProcessImporterClient::OnAutofillFormDataImportGroup(
      bridge_->SetAutofillFormData(autofill_form_data_);
  }
  

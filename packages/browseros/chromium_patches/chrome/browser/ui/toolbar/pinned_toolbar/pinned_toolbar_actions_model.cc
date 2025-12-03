@@ -1,15 +1,15 @@
 diff --git a/chrome/browser/ui/toolbar/pinned_toolbar/pinned_toolbar_actions_model.cc b/chrome/browser/ui/toolbar/pinned_toolbar/pinned_toolbar_actions_model.cc
-index 613d124be1752..e33e71988598a 100644
+index d9315fa4fa5b0..8edfc67de1d63 100644
 --- a/chrome/browser/ui/toolbar/pinned_toolbar/pinned_toolbar_actions_model.cc
 +++ b/chrome/browser/ui/toolbar/pinned_toolbar/pinned_toolbar_actions_model.cc
-@@ -16,6 +16,7 @@
+@@ -17,6 +17,7 @@
  #include "base/strings/strcat.h"
  #include "base/values.h"
  #include "chrome/browser/profiles/profile.h"
 +#include "chrome/browser/ui/actions/browseros_actions_config.h"
  #include "chrome/browser/ui/actions/chrome_action_id.h"
- #include "chrome/browser/ui/browser.h"
  #include "chrome/browser/ui/toolbar/pinned_toolbar/pinned_toolbar_actions_model_factory.h"
+ #include "chrome/browser/ui/toolbar/toolbar_pref_names.h"
 @@ -236,8 +237,11 @@ void PinnedToolbarActionsModel::MaybeMigrateExistingPinnedStates() {
    if (!CanUpdate()) {
      return;
@@ -23,7 +23,7 @@ index 613d124be1752..e33e71988598a 100644
      pref_service_->SetBoolean(prefs::kPinnedChromeLabsMigrationComplete, true);
    }
    if (features::HasTabSearchToolbarButton() &&
-@@ -254,6 +258,23 @@ void PinnedToolbarActionsModel::MaybeMigrateExistingPinnedStates() {
+@@ -253,6 +257,23 @@ void PinnedToolbarActionsModel::MaybeMigrateExistingPinnedStates() {
    }
  }
  

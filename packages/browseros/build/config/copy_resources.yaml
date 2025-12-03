@@ -33,6 +33,12 @@
 #     arch: ["x64"]
 
 copy_operations:
+  # Version file
+  - name: "BrowserOS Version File"
+    source: "resources/BROWSEROS_VERSION"
+    destination: "chrome/BROWSEROS_VERSION"
+    type: "file"
+
   # Extensions
   # - name: "AI Side Panel Extension"
   #   source: "resources/files/ai_side_panel"

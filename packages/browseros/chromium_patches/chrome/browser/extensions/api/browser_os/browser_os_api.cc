@@ -1,9 +1,9 @@
 diff --git a/chrome/browser/extensions/api/browser_os/browser_os_api.cc b/chrome/browser/extensions/api/browser_os/browser_os_api.cc
 new file mode 100644
-index 0000000000000..0022c6ea0fe1b
+index 0000000000000..84988d84caa41
 --- /dev/null
 +++ b/chrome/browser/extensions/api/browser_os/browser_os_api.cc
-@@ -0,0 +1,1316 @@
+@@ -0,0 +1,1317 @@
 +// Copyright 2024 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -23,6 +23,7 @@ index 0000000000000..0022c6ea0fe1b
 +#include "components/prefs/pref_service.h"
 +#include "base/json/json_writer.h"
 +#include "base/strings/utf_string_conversions.h"
++#include "base/strings/string_number_conversions.h"
 +#include "base/base64.h"
 +#include "base/time/time.h"
 +#include "base/values.h"
@@ -115,7 +116,7 @@ index 0000000000000..0022c6ea0fe1b
 +  }
 +
 +  // String attributes map with enum keys converted to strings
-+  if (!node.string_attributes.empty()) {
++  if (node.string_attributes.size() > 0) {
 +    base::Value::Dict attrs;
 +    for (const auto& [key, value] : node.string_attributes) {
 +      attrs.Set(ui::ToString(key), value);
@@ -124,7 +125,7 @@ index 0000000000000..0022c6ea0fe1b
 +  }
 +
 +  // Int attributes map
-+  if (!node.int_attributes.empty()) {
++  if (node.int_attributes.size() > 0) {
 +    base::Value::Dict attrs;
 +    for (const auto& [key, value] : node.int_attributes) {
 +      attrs.Set(ui::ToString(key), value);
@@ -133,7 +134,7 @@ index 0000000000000..0022c6ea0fe1b
 +  }
 +
 +  // Float attributes map
-+  if (!node.float_attributes.empty()) {
++  if (node.float_attributes.size() > 0) {
 +    base::Value::Dict attrs;
 +    for (const auto& [key, value] : node.float_attributes) {
 +      attrs.Set(ui::ToString(key), static_cast<double>(value));
@@ -142,16 +143,16 @@ index 0000000000000..0022c6ea0fe1b
 +  }
 +
 +  // Bool attributes map
-+  if (!node.bool_attributes.empty()) {
++  if (node.bool_attributes && node.bool_attributes->Size() > 0) {
 +    base::Value::Dict attrs;
-+    for (const auto& [key, value] : node.bool_attributes) {
++    node.bool_attributes->ForEach([&attrs](ax::mojom::BoolAttribute key, bool value) {
 +      attrs.Set(ui::ToString(key), value);
-+    }
++    });
 +    dict.Set("boolAttributes", std::move(attrs));
 +  }
 +
 +  // IntList attributes map
-+  if (!node.intlist_attributes.empty()) {
++  if (node.intlist_attributes.size() > 0) {
 +    base::Value::Dict attrs;
 +    for (const auto& [key, values] : node.intlist_attributes) {
 +      base::Value::List list;
@@ -164,7 +165,7 @@ index 0000000000000..0022c6ea0fe1b
 +  }
 +
 +  // StringList attributes map
-+  if (!node.stringlist_attributes.empty()) {
++  if (node.stringlist_attributes.size() > 0) {
 +    base::Value::Dict attrs;
 +    for (const auto& [key, values] : node.stringlist_attributes) {
 +      base::Value::List list;

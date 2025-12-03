@@ -1,11 +1,11 @@
 diff --git a/chrome/app/generated_resources.grd b/chrome/app/generated_resources.grd
-index 186d94b83cb9c..1dd06536b1105 100644
+index 873f67b36de4d..8d0b2e34e77f9 100644
 --- a/chrome/app/generated_resources.grd
 +++ b/chrome/app/generated_resources.grd
-@@ -8840,6 +8840,15 @@ Keep your key file in a safe place. You will need it to create new versions of y
-           Reading list
-         </message>
-       </if>
+@@ -9033,6 +9033,15 @@ Keep your key file in a safe place. You will need it to create new versions of y
+       <message name="IDS_READ_LATER_COLLAPSE_BUTTON_ARIA_LABEL" desc="Aria label for the Read later list collapse button.">
+         Collapse <ph name="HEADER">$1<ex>Unread</ex></ph>
+       </message>
 +      <message name="IDS_THIRD_PARTY_LLM_TITLE" desc="Title for 3rd party LLM side panel">
 +        LLM Chat
 +      </message>
@@ -18,7 +18,7 @@ index 186d94b83cb9c..1dd06536b1105 100644
        <message name="IDS_READ_LATER_MENU_UNREAD_HEADER" desc="Header for section of unread Read later items.">
          Unread
        </message>
-@@ -10882,6 +10891,9 @@ Check your passwords anytime in <ph name="GOOGLE_PASSWORD_MANAGER">$1<ex>Google
+@@ -11174,6 +11183,9 @@ Check your passwords anytime in <ph name="GOOGLE_PASSWORD_MANAGER">$1<ex>Google
          <message name="IDS_IMPORT_FROM_FIREFOX" desc="browser combo box: Mozilla Firefox">
            Mozilla Firefox
          </message>

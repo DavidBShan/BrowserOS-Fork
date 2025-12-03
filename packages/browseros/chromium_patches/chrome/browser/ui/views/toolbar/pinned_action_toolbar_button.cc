@@ -1,5 +1,5 @@
 diff --git a/chrome/browser/ui/views/toolbar/pinned_action_toolbar_button.cc b/chrome/browser/ui/views/toolbar/pinned_action_toolbar_button.cc
-index 7ccb336f542f3..6d54a267d75b0 100644
+index f8298702050da..76fce26e797dd 100644
 --- a/chrome/browser/ui/views/toolbar/pinned_action_toolbar_button.cc
 +++ b/chrome/browser/ui/views/toolbar/pinned_action_toolbar_button.cc
 @@ -8,6 +8,11 @@
@@ -14,24 +14,24 @@ index 7ccb336f542f3..6d54a267d75b0 100644
  #include "base/metrics/user_metrics.h"
  #include "base/strings/strcat.h"
  #include "chrome/app/vector_icons/vector_icons.h"
-@@ -26,6 +31,7 @@
- #include "chrome/browser/ui/views/toolbar/toolbar_ink_drop_util.h"
+@@ -30,6 +35,7 @@
+ #include "chrome/browser/ui/views/toolbar/toolbar_view.h"
  #include "chrome/browser/ui/web_applications/app_browser_controller.h"
  #include "chrome/grit/generated_resources.h"
 +#include "third_party/skia/include/core/SkColor.h"
  #include "ui/actions/action_id.h"
  #include "ui/actions/action_utils.h"
  #include "ui/actions/actions.h"
-@@ -39,6 +45,8 @@
+@@ -43,6 +49,8 @@
  #include "ui/views/controls/button/button_controller.h"
  #include "ui/views/view_class_properties.h"
  #include "ui/views/view_utils.h"
 +#include "components/prefs/pref_service.h"
 +#include "chrome/common/pref_names.h"
  
- DEFINE_UI_CLASS_PROPERTY_TYPE(PinnedToolbarActionFlexPriority)
- DEFINE_UI_CLASS_PROPERTY_KEY(
-@@ -72,6 +80,30 @@ PinnedActionToolbarButton::PinnedActionToolbarButton(
+ namespace {
+ // Width of the status indicator shown across the button.
+@@ -85,6 +93,30 @@ PinnedActionToolbarButton::PinnedActionToolbarButton(
    GetViewAccessibility().SetDescription(
        std::u16string(), ax::mojom::DescriptionFrom::kAttributeExplicitlyEmpty);
  
@@ -62,7 +62,7 @@ index 7ccb336f542f3..6d54a267d75b0 100644
    // Normally, the notify action is determined by whether a view is draggable
    // (and is set to press for non-draggable and release for draggable views).
    // However, PinnedActionToolbarButton may be draggable or non-draggable
-@@ -223,7 +255,13 @@ void PinnedActionToolbarButton::UpdateIcon() {
+@@ -234,7 +266,13 @@ void PinnedActionToolbarButton::UpdateIcon() {
                                      ? icons->touch_icon
                                      : icons->icon;
  
@@ -77,7 +77,7 @@ index 7ccb336f542f3..6d54a267d75b0 100644
      UpdateIconsWithColors(
          icon, GetColorProvider()->GetColor(kColorToolbarActionItemEngaged),
          GetColorProvider()->GetColor(kColorToolbarActionItemEngaged),
-@@ -325,6 +363,26 @@ void PinnedActionToolbarButtonActionViewInterface::ActionItemChangedImpl(
+@@ -336,6 +374,26 @@ void PinnedActionToolbarButtonActionViewInterface::ActionItemChangedImpl(
      }
    }
  

@@ -1,5 +1,5 @@
 diff --git a/chrome/browser/BUILD.gn b/chrome/browser/BUILD.gn
-index ad39862fdd9a5..fc8552e6e6dac 100644
+index 7280ef29b85c1..8c1ed0a9de786 100644
 --- a/chrome/browser/BUILD.gn
 +++ b/chrome/browser/BUILD.gn
 @@ -12,6 +12,7 @@ import("//build/config/features.gni")
@@ -8,9 +8,9 @@ index ad39862fdd9a5..fc8552e6e6dac 100644
  import("//chrome/browser/buildflags.gni")
 +import("//chrome/browser/sparkle_buildflags.gni")
  import("//chrome/browser/downgrade/buildflags.gni")
- import("//chrome/browser/request_header_integrity/buildflags.gni")
  import("//chrome/common/features.gni")
-@@ -119,6 +120,11 @@ buildflag_header("buildflags") {
+ import("//chrome/common/request_header_integrity/buildflags.gni")
+@@ -117,6 +118,11 @@ buildflag_header("buildflags") {
    }
  }
  
@@ -22,18 +22,18 @@ index ad39862fdd9a5..fc8552e6e6dac 100644
  source_set("browser_process") {
    sources = [
      "browser_process.cc",
-@@ -287,6 +293,10 @@ static_library("browser") {
-     "chrome_browser_interface_binders.h",
-     "chrome_browser_interface_binders_webui.cc",
+@@ -275,6 +281,10 @@ static_library("browser") {
      "chrome_browser_interface_binders_webui.h",
+     "chrome_browser_interface_binders_webui_parts.h",
+     "chrome_browser_interface_binders_webui_parts_features.cc",
 +    "browseros_server/browseros_server_manager.cc",
 +    "browseros_server/browseros_server_manager.h",
 +    "browseros_server/browseros_server_prefs.cc",
 +    "browseros_server/browseros_server_prefs.h",
      "chrome_browser_main.cc",
      "chrome_browser_main.h",
-     "chrome_browser_main_extra_parts_nacl_deprecation.cc",
-@@ -6557,6 +6567,20 @@ static_library("browser") {
+     "chrome_content_browser_client.cc",
+@@ -6751,6 +6761,20 @@ static_library("browser") {
      ]
    }
  

@@ -1,6 +1,6 @@
 diff --git a/chrome/browser/extensions/api/browser_os/browser_os_change_detector.cc b/chrome/browser/extensions/api/browser_os/browser_os_change_detector.cc
 new file mode 100644
-index 0000000000000..1df7f2cbf0e0c
+index 0000000000000..ea45bebcce461
 --- /dev/null
 +++ b/chrome/browser/extensions/api/browser_os/browser_os_change_detector.cc
 @@ -0,0 +1,205 @@
@@ -185,9 +185,9 @@ index 0000000000000..1df7f2cbf0e0c
 +}
 +
 +void BrowserOSChangeDetector::OnFocusChangedInPage(
-+    content::FocusedNodeDetails* details) {
++    const content::FocusedNodeDetails& details) {
 +  if (!monitoring_) return;
-+  
++
 +  VLOG(2) << "[browseros] Focus changed";
 +  OnChangeDetected();
 +}

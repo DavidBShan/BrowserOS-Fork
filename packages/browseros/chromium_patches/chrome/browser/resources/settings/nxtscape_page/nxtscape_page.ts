@@ -1,9 +1,9 @@
 diff --git a/chrome/browser/resources/settings/nxtscape_page/nxtscape_page.ts b/chrome/browser/resources/settings/nxtscape_page/nxtscape_page.ts
 new file mode 100644
-index 0000000000000..80e988de4d595
+index 0000000000000..70809bc5267a3
 --- /dev/null
 +++ b/chrome/browser/resources/settings/nxtscape_page/nxtscape_page.ts
-@@ -0,0 +1,1099 @@
+@@ -0,0 +1,1098 @@
 +// Copyright 2024 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -13,7 +13,6 @@ index 0000000000000..80e988de4d595
 + */
 +
 +import '../settings_page/settings_section.js';
-+import '../settings_page_styles.css.js';
 +import '../settings_shared.css.js';
 +import '../controls/settings_toggle_button.js';
 +import 'chrome://resources/cr_elements/cr_button/cr_button.js';

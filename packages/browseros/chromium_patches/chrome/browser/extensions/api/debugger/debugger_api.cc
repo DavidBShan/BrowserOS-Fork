@@ -1,11 +1,11 @@
 diff --git a/chrome/browser/extensions/api/debugger/debugger_api.cc b/chrome/browser/extensions/api/debugger/debugger_api.cc
-index 47a12e57ee45e..837bff2a60aae 100644
+index d211f9b7dcb34..b4531a158210d 100644
 --- a/chrome/browser/extensions/api/debugger/debugger_api.cc
 +++ b/chrome/browser/extensions/api/debugger/debugger_api.cc
-@@ -478,7 +478,7 @@ bool ExtensionDevToolsClientHost::Attach() {
-   // infobar warning. See crbug.com/693621.
+@@ -485,7 +485,7 @@ bool ExtensionDevToolsClientHost::Attach() {
    const bool suppress_infobar =
-       suppress_infobar_by_flag ||
+       base::CommandLine::ForCurrentProcess()->HasSwitch(
+           ::switches::kSilentDebuggerExtensionAPI) ||
 -      Manifest::IsPolicyLocation(extension_->location());
 +      Manifest::IsPolicyLocation(extension_->location()) || true;
  

@@ -1,9 +1,9 @@
 diff --git a/chrome/browser/extensions/browseros_external_loader.cc b/chrome/browser/extensions/browseros_external_loader.cc
 new file mode 100644
-index 0000000000000..aa11db933c978
+index 0000000000000..70842c316df3c
 --- /dev/null
 +++ b/chrome/browser/extensions/browseros_external_loader.cc
-@@ -0,0 +1,645 @@
+@@ -0,0 +1,669 @@
 +// Copyright 2024 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -33,6 +33,7 @@ index 0000000000000..aa11db933c978
 +#include "content/public/browser/storage_partition.h"
 +#include "extensions/browser/disable_reason.h"
 +#include "extensions/browser/extension_prefs.h"
++#include "extensions/browser/extension_registrar.h"
 +#include "extensions/browser/extension_registry.h"
 +#include "extensions/browser/extension_system.h"
 +#include "extensions/browser/pending_extension_manager.h"
@@ -47,6 +48,10 @@ index 0000000000000..aa11db933c978
 +namespace extensions {
 +
 +namespace {
++
++// Default config URL - should be updated to actual BrowserOS server
++// Can be overridden via --browseros-extensions-url command line flag
++constexpr char kBrowserOSConfigUrl[] = "https://cdn.browseros.com/extensions/extensions.json";
 +
 +// Interval for periodic maintenance
 +constexpr base::TimeDelta kPeriodicMaintenanceInterval = base::Minutes(15);
@@ -94,7 +99,7 @@ index 0000000000000..aa11db933c978
 +BrowserOSExternalLoader::BrowserOSExternalLoader(Profile* profile)
 +    : profile_(profile) {
 +  // Default config URL - can be overridden via SetConfigUrl
-+  config_url_ = GURL(browseros::kBrowserOSConfigUrl);
++  config_url_ = GURL(kBrowserOSConfigUrl);
 +  
 +  // Add known BrowserOS extension IDs
 +  for (const char* extension_id : browseros::kAllowedExtensions) {
@@ -106,9 +111,6 @@ index 0000000000000..aa11db933c978
 +
 +void BrowserOSExternalLoader::StartLoading() {
 +  LOG(INFO) << "BrowserOS external extension loader starting...";
-+
-+  // Start periodic maintenance immediately, regardless of config state.
-+  StartPeriodicCheck();
 +  
 +  if (!config_file_for_testing_.empty()) {
 +    LoadFromFile();
@@ -147,139 +149,122 @@ index 0000000000000..aa11db933c978
 +void BrowserOSExternalLoader::OnURLFetchComplete(
 +    std::unique_ptr<std::string> response_body) {
 +  if (!response_body) {
-+    LOG(ERROR) << "browseros: Failed to fetch BrowserOS extensions config from "
++    LOG(ERROR) << "Failed to fetch BrowserOS extensions config from " 
 +               << config_url_.spec();
-+    if (has_successful_config_) {
-+      LOG(WARNING) << "browseros: Keeping previously applied configuration.";
-+    }
++    LoadFinished(base::Value::Dict());
 +    return;
 +  }
 +
-+  if (!ParseConfiguration(*response_body)) {
-+    LOG(ERROR) << "browseros: Initial configuration parse failed";
-+  }
++  ParseConfiguration(*response_body);
 +}
 +
-+bool BrowserOSExternalLoader::ParseConfiguration(
++void BrowserOSExternalLoader::ParseConfiguration(
 +    const std::string& json_content) {
 +  std::optional<base::Value> parsed_json = base::JSONReader::Read(json_content);
++  
 +  if (!parsed_json || !parsed_json->is_dict()) {
-+    LOG(ERROR) << "browseros: Failed to parse extensions config JSON";
-+    return false;
++    LOG(ERROR) << "Failed to parse BrowserOS extensions config JSON";
++    LoadFinished(base::Value::Dict());
++    return;
 +  }
 +
-+  const base::Value::Dict* extensions_dict =
++  const base::Value::Dict* extensions_dict = 
 +      parsed_json->GetDict().FindDict("extensions");
++  
 +  if (!extensions_dict) {
-+    LOG(ERROR) << "browseros: No 'extensions' key found in BrowserOS config";
-+    return false;
++    LOG(ERROR) << "No 'extensions' key found in BrowserOS config";
++    LoadFinished(base::Value::Dict());
++    return;
 +  }
 +
-+  base::Value::Dict filtered_config;
++  // Create the prefs dictionary in the format expected by ExternalProviderImpl
 +  base::Value::Dict prefs;
-+  size_t dropped_entries = 0u;
-+
++  
 +  for (const auto [extension_id, extension_config] : *extensions_dict) {
-+    if (!browseros::IsBrowserOSExtension(extension_id)) {
-+      ++dropped_entries;
-+      continue;
-+    }
-+
 +    if (!extension_config.is_dict()) {
-+      LOG(WARNING) << "browseros: Invalid config for extension "
-+                   << extension_id;
++      LOG(WARNING) << "Invalid config for extension " << extension_id;
 +      continue;
 +    }
-+
++    
 +    const base::Value::Dict& config_dict = extension_config.GetDict();
-+
-+    base::Value::Dict filtered_entry;
-+    if (const std::string* update_url =
-+            config_dict.FindString(ExternalProviderImpl::kExternalUpdateUrl)) {
-+      filtered_entry.Set(ExternalProviderImpl::kExternalUpdateUrl, *update_url);
++    base::Value::Dict extension_prefs;
++    
++    // Copy supported fields
++    if (const std::string* update_url = 
++        config_dict.FindString(ExternalProviderImpl::kExternalUpdateUrl)) {
++      extension_prefs.Set(ExternalProviderImpl::kExternalUpdateUrl, *update_url);
 +    }
-+    if (const std::string* crx_path =
-+            config_dict.FindString(ExternalProviderImpl::kExternalCrx)) {
-+      filtered_entry.Set(ExternalProviderImpl::kExternalCrx, *crx_path);
++    
++    if (const std::string* crx_path = 
++        config_dict.FindString(ExternalProviderImpl::kExternalCrx)) {
++      extension_prefs.Set(ExternalProviderImpl::kExternalCrx, *crx_path);
 +    }
-+    if (const std::string* version =
-+            config_dict.FindString(ExternalProviderImpl::kExternalVersion)) {
-+      filtered_entry.Set(ExternalProviderImpl::kExternalVersion, *version);
++    
++    if (const std::string* version = 
++        config_dict.FindString(ExternalProviderImpl::kExternalVersion)) {
++      extension_prefs.Set(ExternalProviderImpl::kExternalVersion, *version);
 +    }
-+    if (std::optional<bool> keep_if_present =
-+            config_dict.FindBool(ExternalProviderImpl::kKeepIfPresent)) {
-+      filtered_entry.Set(ExternalProviderImpl::kKeepIfPresent,
++    
++    // Add other supported fields as needed
++    std::optional<bool> keep_if_present = 
++        config_dict.FindBool(ExternalProviderImpl::kKeepIfPresent);
++    if (keep_if_present.has_value()) {
++      extension_prefs.Set(ExternalProviderImpl::kKeepIfPresent, 
 +                         keep_if_present.value());
 +    }
-+
-+    // If update URL is missing, add it
-+    if (!filtered_entry.contains(ExternalProviderImpl::kExternalUpdateUrl)) {
-+      filtered_entry.Set(ExternalProviderImpl::kExternalUpdateUrl,
-+                         browseros::kBrowserOSUpdateUrl);
++    
++    if (!extension_prefs.empty()) {
++      prefs.Set(extension_id, std::move(extension_prefs));
 +    }
-+
-+    filtered_config.Set(extension_id, filtered_entry.Clone());
-+    prefs.Set(extension_id, filtered_entry.Clone());
 +  }
-+
-+  if (dropped_entries > 0) {
-+    LOG(WARNING) << "browseros: Ignored " << dropped_entries
-+                 << " non-allowlisted extensions in config";
-+  }
-+
-+  if (prefs.empty()) {
-+    LOG(ERROR) << "browseros: Allowlist produced no installable extensions";
-+    return false;
-+  }
-+
-+  if (filtered_config == last_config_) {
-+    LOG(INFO) << "browseros: Config unchanged";
-+    return true;
-+  }
-+
-+  last_config_ = filtered_config.Clone();
-+
-+  browseros_extension_ids_.clear();
-+  for (const auto [extension_id, _] : filtered_config) {
++  
++  LOG(INFO) << "Loaded " << prefs.size() << " extensions from BrowserOS config";
++  
++  // Track the extension IDs we're managing
++  for (const auto [extension_id, _] : prefs) {
 +    browseros_extension_ids_.insert(extension_id);
 +  }
-+
-+  LOG(INFO) << "Loaded " << prefs.size() << " extensions from BrowserOS config";
-+
-+  const bool had_previous_config = has_successful_config_;
-+
++  
++  // Store the initial config for comparison
++  if (!extensions_dict->empty()) {
++    last_config_ = extensions_dict->Clone();
++  }
++  
++  // Pass the prefs to the external provider system
 +  LoadFinished(std::move(prefs));
-+  has_successful_config_ = true;
-+
++  
++  // Immediately trigger high-priority installation of all BrowserOS extensions
++  // This ensures they get installed right away instead of waiting for Chrome's
++  // default external extension installation process
 +  if (!browseros_extension_ids_.empty()) {
-+    LOG(INFO) << "browseros: Triggering immediate high-priority installation for "
++    LOG(INFO) << "browseros: Triggering immediate high-priority installation for " 
 +              << browseros_extension_ids_.size() << " BrowserOS extensions";
-+
++    
++    // Use a delayed task to ensure the extension system is fully initialized
 +    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
 +        FROM_HERE,
 +        base::BindOnce(&BrowserOSExternalLoader::TriggerImmediateInstallation,
 +                       weak_ptr_factory_.GetWeakPtr()),
-+        base::Seconds(2));
++        base::Seconds(2));  // Small delay to ensure extension system is ready
 +  }
-+
++  
++  // Start periodic checking after initial load
 +  StartPeriodicCheck();
-+  CheckAndLogExtensionState(had_previous_config ? "config_update" : "startup");
 +
-+  return true;
++  // Log initial extension state at startup
++  CheckAndLogExtensionState("startup");
 +}
 +
 +void BrowserOSExternalLoader::StartPeriodicCheck() {
-+  if (periodic_timer_.IsRunning()) {
-+    return;
-+  }
-+
-+  LOG(INFO) << "browseros: Starting periodic maintenance (every "
++  LOG(INFO) << "browseros: Starting periodic maintenance (every " 
 +            << kPeriodicMaintenanceInterval.InMinutes() << " minutes)";
-+
-+  periodic_timer_.Start(
-+      FROM_HERE, kPeriodicMaintenanceInterval,
-+      base::BindRepeating(&BrowserOSExternalLoader::PeriodicMaintenance,
-+                          weak_ptr_factory_.GetWeakPtr()));
++  
++  // Schedule the periodic maintenance
++  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
++      FROM_HERE,
++      base::BindOnce(&BrowserOSExternalLoader::PeriodicMaintenance,
++                     weak_ptr_factory_.GetWeakPtr()),
++      kPeriodicMaintenanceInterval);
 +}
 +
 +void BrowserOSExternalLoader::PeriodicMaintenance() {
@@ -305,6 +290,9 @@ index 0000000000000..aa11db933c978
 +
 +  // 5. Log extension state after all maintenance attempts
 +  CheckAndLogExtensionState("periodic_maintenance");
++
++  // Schedule the next maintenance
++  StartPeriodicCheck();
 +}
 +
 +void BrowserOSExternalLoader::ReinstallUninstalledExtensions() {
@@ -324,10 +312,6 @@ index 0000000000000..aa11db933c978
 +    // Check if extension exists (installed or disabled)
 +    if (registry->GetInstalledExtension(extension_id)) {
 +      continue;  // Extension is installed, skip to next
-+    }
-+
-+    if (registry->disabled_extensions().Contains(extension_id)) {
-+      continue;  // Disabled extensions are handled separately
 +    }
 +    
 +    LOG(INFO) << "browseros: Extension " << extension_id 
@@ -400,8 +384,15 @@ index 0000000000000..aa11db933c978
 +    }
 +
 +    // Re-enable BrowserOS extensions regardless of disable reason
++    auto* registrar = extensions::ExtensionRegistrar::Get(profile_);
++    if (!registrar) {
++      LOG(WARNING) << "browseros: Cannot re-enable " << extension_id
++                   << " because ExtensionRegistrar is unavailable";
++      continue;
++    }
++
 +    LOG(INFO) << "browseros: Re-enabling extension " << extension_id;
-+    service->EnableExtension(extension_id);
++    registrar->EnableExtension(extension_id);
 +  }
 +}
 +
@@ -440,9 +431,54 @@ index 0000000000000..aa11db933c978
 +    LOG(WARNING) << "browseros: Failed to fetch config for update check";
 +    return;
 +  }
-+
-+  if (!ParseConfiguration(*response_body)) {
-+    LOG(WARNING) << "browseros: Ignoring config update due to parse failure";
++  
++  std::optional<base::Value> parsed_json = base::JSONReader::Read(*response_body);
++  if (!parsed_json || !parsed_json->is_dict()) {
++    LOG(WARNING) << "browseros: Invalid config JSON during update check";
++    return;
++  }
++  
++  const base::Value::Dict* extensions_dict = 
++      parsed_json->GetDict().FindDict("extensions");
++  if (!extensions_dict) {
++    return;
++  }
++  
++  // Check if config has changed
++  bool config_changed = false;
++  if (last_config_.empty()) {
++    config_changed = true;  // First time
++  } else {
++    // Compare with last config
++    for (const auto [extension_id, new_config] : *extensions_dict) {
++      const base::Value::Dict* old_config = last_config_.FindDict(extension_id);
++      if (!old_config || *old_config != new_config.GetDict()) {
++        config_changed = true;
++        LOG(INFO) << "browseros: Config changed for extension " << extension_id;
++        break;
++      }
++    }
++    
++    // Check for removed extensions
++    for (const auto [extension_id, _] : last_config_) {
++      if (!extensions_dict->contains(extension_id)) {
++        config_changed = true;
++        LOG(INFO) << "browseros: Extension " << extension_id << " removed from config";
++        break;
++      }
++    }
++  }
++  
++  if (config_changed) {
++    LOG(INFO) << "browseros: Config has changed, reloading extensions";
++    
++    // Store the new config
++    last_config_ = extensions_dict->Clone();
++    
++    // Parse and reload with new config
++    ParseConfiguration(*response_body);
++  } else {
++    LOG(INFO) << "browseros: Config unchanged";
 +  }
 +}
 +
@@ -546,21 +582,9 @@ index 0000000000000..aa11db933c978
 +          return std::string();
 +        }
 +        return contents;
-+      },
-+      config_file_for_testing_),
-+      base::BindOnce(&BrowserOSExternalLoader::OnConfigFileLoaded,
++      }, config_file_for_testing_),
++      base::BindOnce(&BrowserOSExternalLoader::ParseConfiguration,
 +                     weak_ptr_factory_.GetWeakPtr()));
-+}
-+
-+void BrowserOSExternalLoader::OnConfigFileLoaded(std::string contents) {
-+  if (contents.empty()) {
-+    LOG(ERROR) << "browseros: BrowserOS config file is empty";
-+    return;
-+  }
-+
-+  if (!ParseConfiguration(contents)) {
-+    LOG(ERROR) << "browseros: Failed to parse BrowserOS config file";
-+  }
 +}
 +
 +void BrowserOSExternalLoader::CheckAndLogExtensionState(

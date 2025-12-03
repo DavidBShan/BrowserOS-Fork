@@ -1,35 +1,45 @@
 # BrowserOS Linux Release Build Configuration
+#
+# Environment Variables:
+#   Use !env tag to reference environment variables:
+#     Example: chromium_src: !env CHROMIUM_SRC
+
 build:
   type: release
-  architecture: x64  # Linux x64 only
-  # architectures: [x64] # Single architecture for Linux
-  universal: false # Linux doesn't support universal binaries
+  architecture: x64  # Linux x64
 
 gn_flags:
   file: build/config/gn/flags.linux.release.gn
 
-steps:
-  clean: true
-  git_setup: true
-  apply_patches: true
-  build: true
-  sign: false  # Linux doesn't require code signing
-  package: true
+# Explicit module execution order
+modules:
+  # Phase 1: Setup
+  - clean
+  - git_setup
 
-paths:
-  root_dir: .
-  # chromium_src: ../chromium-src
+  # Phase 2: Patches & Resources
+  - resources
+  - chromium_replace
+  - string_replaces
+  - series_patches
+  - patches
 
-# Environment-specific settings
-env:
-  PYTHONPATH: scripts
+  # Phase 3: Build
+  - configure
+  - compile
 
-# Linux-specific settings
-linux:
-  appimage:
-    compression: gzip  # Compression type for AppImage
-    architecture: x86_64  # AppImage architecture designation
+  # Phase 4: Package (Linux doesn't require code signing)
+  - package_linux
+
+  # Phase 5: Upload (optional)
+  - upload_gcs
+
+# Required environment variables
+# Note: CHROMIUM_SRC can be provided via --chromium-src CLI flag, YAML config, or env var
+# Note: GCS_BUCKET defaults to 'nxtscape' if not set
+# Note: GCS_SERVICE_ACCOUNT_FILE defaults to 'gclient.json' if not set
+# Linux release builds don't require code signing, only upload
 
 # Notification settings
 notifications:
-  slack: true # Enable Slack notifications for release builds
+  slack: true

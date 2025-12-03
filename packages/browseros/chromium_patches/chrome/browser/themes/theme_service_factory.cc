@@ -1,18 +1,18 @@
 diff --git a/chrome/browser/themes/theme_service_factory.cc b/chrome/browser/themes/theme_service_factory.cc
-index 1809d9f6aff5b..45a59449fd178 100644
+index 8634cbb4dc17a..3bd0aec1c7095 100644
 --- a/chrome/browser/themes/theme_service_factory.cc
 +++ b/chrome/browser/themes/theme_service_factory.cc
-@@ -127,11 +127,11 @@ void ThemeServiceFactory::RegisterProfilePrefs(
-   registry->RegisterIntegerPref(prefs::kPolicyThemeColor, SK_ColorTRANSPARENT);
+@@ -131,11 +131,11 @@ void ThemeServiceFactory::RegisterProfilePrefs(
+                                 SK_ColorTRANSPARENT);
    registry->RegisterIntegerPref(
-       prefs::kBrowserColorSchemeDoNotUse,
+       prefs::kDeprecatedBrowserColorSchemeDoNotUse,
 -      static_cast<int>(ThemeService::BrowserColorScheme::kSystem),
 +      static_cast<int>(ThemeService::BrowserColorScheme::kLight),
        user_prefs::PrefRegistrySyncable::SYNCABLE_PREF);
    registry->RegisterIntegerPref(
-       prefs::kNonSyncingBrowserColorSchemeDoNotUse,
+       prefs::kBrowserColorScheme,
 -      static_cast<int>(ThemeService::BrowserColorScheme::kSystem));
 +      static_cast<int>(ThemeService::BrowserColorScheme::kLight));
    registry->RegisterIntegerPref(
-       prefs::kUserColorDoNotUse, SK_ColorTRANSPARENT,
+       prefs::kDeprecatedUserColorDoNotUse, SK_ColorTRANSPARENT,
        user_prefs::PrefRegistrySyncable::SYNCABLE_PREF);

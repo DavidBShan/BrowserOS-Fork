@@ -8,8 +8,12 @@ chrome_pgo_phase = 0
 dcheck_always_on=false
 enable_sparkle=true
 
+# new macOS build flags
+use_system_xcode = true
+use_clang_modules = false
 
-enable_reading_list=false
+
+
 enable_reporting=false
 enable_service_discovery=false
 enable_widevine=true
@@ -26,6 +30,7 @@ ffmpeg_branding="Chrome"
 proprietary_codecs=true
 enable_platform_hevc = true
 disable_fieldtrial_testing_config=true
+
 
 # build_with_tflite_lib=false
 # clang_use_chrome_plugins=false

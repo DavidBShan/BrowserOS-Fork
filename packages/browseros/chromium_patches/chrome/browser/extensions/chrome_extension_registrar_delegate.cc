@@ -1,5 +1,5 @@
 diff --git a/chrome/browser/extensions/chrome_extension_registrar_delegate.cc b/chrome/browser/extensions/chrome_extension_registrar_delegate.cc
-index a9fc73b11371d..41f81b3712a6c 100644
+index 6eec0585e8925..bf19269ade03a 100644
 --- a/chrome/browser/extensions/chrome_extension_registrar_delegate.cc
 +++ b/chrome/browser/extensions/chrome_extension_registrar_delegate.cc
 @@ -12,6 +12,7 @@
@@ -10,7 +10,7 @@ index a9fc73b11371d..41f81b3712a6c 100644
  #include "chrome/browser/extensions/component_loader.h"
  #include "chrome/browser/extensions/corrupted_extension_reinstaller.h"
  #include "chrome/browser/extensions/data_deleter.h"
-@@ -314,6 +315,15 @@ bool ChromeExtensionRegistrarDelegate::CanDisableExtension(
+@@ -317,6 +318,15 @@ bool ChromeExtensionRegistrarDelegate::CanDisableExtension(
      return true;
    }
  

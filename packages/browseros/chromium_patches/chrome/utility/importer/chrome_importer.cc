@@ -1,6 +1,6 @@
 diff --git a/chrome/utility/importer/chrome_importer.cc b/chrome/utility/importer/chrome_importer.cc
 new file mode 100644
-index 0000000000000..5a7c392fd775a
+index 0000000000000..5b121cca3a62c
 --- /dev/null
 +++ b/chrome/utility/importer/chrome_importer.cc
 @@ -0,0 +1,591 @@
@@ -19,13 +19,13 @@ index 0000000000000..5a7c392fd775a
 +#include "base/strings/string_util.h"
 +#include "base/strings/utf_string_conversions.h"
 +#include "base/time/time.h"
-+#include "chrome/common/importer/imported_bookmark_entry.h"
 +#include "chrome/common/importer/importer_autofill_form_data_entry.h"
 +#include "chrome/common/importer/importer_bridge.h"
-+#include "chrome/common/importer/importer_data_types.h"
-+#include "chrome/common/importer/importer_url_row.h"
 +#include "chrome/grit/generated_resources.h"
-+#include "chrome/utility/importer/favicon_reencode.h"
++#include "components/user_data_importer/common/imported_bookmark_entry.h"
++#include "components/user_data_importer/common/importer_data_types.h"
++#include "components/user_data_importer/common/importer_url_row.h"
++#include "components/user_data_importer/content/favicon_reencode.h"
 +#include "sql/database.h"
 +#include "sql/statement.h"
 +#include "ui/base/l10n/l10n_util.h"
@@ -49,7 +49,7 @@ index 0000000000000..5a7c392fd775a
 +
 +ChromeImporter::~ChromeImporter() = default;
 +
-+void ChromeImporter::StartImport(const importer::SourceProfile& source_profile,
++void ChromeImporter::StartImport(const user_data_importer::SourceProfile& source_profile,
 +                               uint16_t items,
 +                               ImporterBridge* bridge) {
 +  bridge_ = bridge;
@@ -57,34 +57,34 @@ index 0000000000000..5a7c392fd775a
 +
 +  bridge_->NotifyStarted();
 +
-+  if ((items & importer::HISTORY) && !cancelled()) {
-+    bridge_->NotifyItemStarted(importer::HISTORY);
++  if ((items & user_data_importer::HISTORY) && !cancelled()) {
++    bridge_->NotifyItemStarted(user_data_importer::HISTORY);
 +    ImportHistory();
-+    bridge_->NotifyItemEnded(importer::HISTORY);
++    bridge_->NotifyItemEnded(user_data_importer::HISTORY);
 +  }
 +
-+  if ((items & importer::FAVORITES) && !cancelled()) {
-+    bridge_->NotifyItemStarted(importer::FAVORITES);
++  if ((items & user_data_importer::FAVORITES) && !cancelled()) {
++    bridge_->NotifyItemStarted(user_data_importer::FAVORITES);
 +    ImportBookmarks();
-+    bridge_->NotifyItemEnded(importer::FAVORITES);
++    bridge_->NotifyItemEnded(user_data_importer::FAVORITES);
 +  }
 +
-+  if ((items & importer::PASSWORDS) && !cancelled()) {
-+    bridge_->NotifyItemStarted(importer::PASSWORDS);
++  if ((items & user_data_importer::PASSWORDS) && !cancelled()) {
++    bridge_->NotifyItemStarted(user_data_importer::PASSWORDS);
 +    ImportPasswords();
-+    bridge_->NotifyItemEnded(importer::PASSWORDS);
++    bridge_->NotifyItemEnded(user_data_importer::PASSWORDS);
 +  }
 +
-+  if ((items & importer::AUTOFILL_FORM_DATA) && !cancelled()) {
-+    bridge_->NotifyItemStarted(importer::AUTOFILL_FORM_DATA);
++  if ((items & user_data_importer::AUTOFILL_FORM_DATA) && !cancelled()) {
++    bridge_->NotifyItemStarted(user_data_importer::AUTOFILL_FORM_DATA);
 +    ImportAutofillFormData();
-+    bridge_->NotifyItemEnded(importer::AUTOFILL_FORM_DATA);
++    bridge_->NotifyItemEnded(user_data_importer::AUTOFILL_FORM_DATA);
 +  }
 +
-+  if ((items & importer::EXTENSIONS) && !cancelled()) {
-+    bridge_->NotifyItemStarted(importer::EXTENSIONS);
++  if ((items & user_data_importer::EXTENSIONS) && !cancelled()) {
++    bridge_->NotifyItemStarted(user_data_importer::EXTENSIONS);
 +    ImportExtensions();
-+    bridge_->NotifyItemEnded(importer::EXTENSIONS);
++    bridge_->NotifyItemEnded(user_data_importer::EXTENSIONS);
 +  }
 +
 +  bridge_->NotifyEnded();
@@ -143,7 +143,7 @@ index 0000000000000..5a7c392fd775a
 +  s.BindInt64(3, ui::PAGE_TRANSITION_MANUAL_SUBFRAME);
 +  s.BindInt64(4, ui::PAGE_TRANSITION_KEYWORD_GENERATED);
 +
-+  std::vector<ImporterURLRow> rows;
++  std::vector<user_data_importer::ImporterURLRow> rows;
 +
 +  while (s.Step() && !cancelled()) {
 +    GURL url(s.ColumnString(0));
@@ -153,7 +153,7 @@ index 0000000000000..5a7c392fd775a
 +      continue;
 +    }
 +
-+    ImporterURLRow row(url);
++    user_data_importer::ImporterURLRow row(url);
 +    row.title = s.ColumnString16(1);
 +    row.last_visit = ChromeTimeToBaseTime(s.ColumnInt64(2));
 +    row.hidden = false;
@@ -167,7 +167,7 @@ index 0000000000000..5a7c392fd775a
 +  LOG(INFO) << "ChromeImporter: Found " << rows.size() << " history items";
 +
 +  if (!rows.empty() && !cancelled()) {
-+    bridge_->SetHistoryItems(rows, importer::VISIT_SOURCE_CHROME_IMPORTED);
++    bridge_->SetHistoryItems(rows, user_data_importer::VISIT_SOURCE_CHROME_IMPORTED);
 +    LOG(INFO) << "ChromeImporter: History import complete";
 +  }
 +
@@ -214,7 +214,7 @@ index 0000000000000..5a7c392fd775a
 +    return;
 +  }
 +
-+  std::vector<ImportedBookmarkEntry> bookmarks;
++  std::vector<user_data_importer::ImportedBookmarkEntry> bookmarks;
 +  FaviconMap favicon_map;
 +
 +  // Process bookmark bar items
@@ -336,7 +336,7 @@ index 0000000000000..5a7c392fd775a
 +    const base::Value::Dict* folder,
 +    const std::vector<std::u16string>& parent_path,
 +    bool is_in_toolbar,
-+    std::vector<ImportedBookmarkEntry>* bookmarks) {
++    std::vector<user_data_importer::ImportedBookmarkEntry>* bookmarks) {
 +
 +  if (!folder)
 +    return;
@@ -367,7 +367,7 @@ index 0000000000000..5a7c392fd775a
 +      // Check if this is an empty folder to add it as an entry
 +      const base::Value::List* inner_children = value.GetDict().FindList("children");
 +      if (inner_children && inner_children->empty()) {
-+        ImportedBookmarkEntry entry;
++        user_data_importer::ImportedBookmarkEntry entry;
 +        entry.is_folder = true;
 +        entry.in_toolbar = is_in_toolbar;
 +        entry.url = GURL();
@@ -389,7 +389,7 @@ index 0000000000000..5a7c392fd775a
 +      if (!CanImportURL(url))
 +        continue;
 +
-+      ImportedBookmarkEntry entry;
++      user_data_importer::ImportedBookmarkEntry entry;
 +      entry.is_folder = false;
 +      entry.in_toolbar = is_in_toolbar;
 +      entry.url = url;
@@ -540,7 +540,7 @@ index 0000000000000..5a7c392fd775a
 +  }
 +
 +  std::optional<base::Value::Dict> preferences =
-+      base::JSONReader::ReadDict(preferences_content);
++      base::JSONReader::ReadDict(preferences_content, base::JSON_PARSE_CHROMIUM_EXTENSIONS);
 +  if (!preferences) {
 +    LOG(ERROR) << "ChromeImporter: Failed to parse JSON from " << preferences_path.value();
 +    return extension_ids;

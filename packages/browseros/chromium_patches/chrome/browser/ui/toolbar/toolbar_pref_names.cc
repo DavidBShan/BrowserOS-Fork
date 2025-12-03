@@ -1,17 +1,18 @@
 diff --git a/chrome/browser/ui/toolbar/toolbar_pref_names.cc b/chrome/browser/ui/toolbar/toolbar_pref_names.cc
-index 4dd749643041a..d2868cb83608f 100644
+index 2ac0c02e74ee0..d2868cb83608f 100644
 --- a/chrome/browser/ui/toolbar/toolbar_pref_names.cc
 +++ b/chrome/browser/ui/toolbar/toolbar_pref_names.cc
-@@ -4,7 +4,9 @@
+@@ -4,8 +4,10 @@
  
  #include "chrome/browser/ui/toolbar/toolbar_pref_names.h"
  
 +#include "base/feature_list.h"
  #include "chrome/browser/ui/actions/chrome_action_id.h"
-+#include "chrome/browser/ui/ui_features.h"
- #include "chrome/common/chrome_features.h"
+ #include "chrome/browser/ui/ui_features.h"
++#include "chrome/common/chrome_features.h"
  #include "components/pref_registry/pref_registry_syncable.h"
  #include "components/prefs/pref_registry_simple.h"
+ #include "ui/actions/actions.h"
 @@ -14,14 +16,7 @@ namespace toolbar {
  
  void RegisterProfilePrefs(user_prefs::PrefRegistrySyncable* registry) {

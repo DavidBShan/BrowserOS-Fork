@@ -1,13 +1,12 @@
 diff --git a/chrome/browser/importer/profile_writer.h b/chrome/browser/importer/profile_writer.h
-index 7bccdf2099ae9..8c2c44972981f 100644
+index f609d99dde302..7d0a074c0da2c 100644
 --- a/chrome/browser/importer/profile_writer.h
 +++ b/chrome/browser/importer/profile_writer.h
-@@ -88,6 +88,10 @@ class ProfileWriter : public base::RefCountedThreadSafe<ProfileWriter> {
+@@ -92,6 +92,9 @@ class ProfileWriter : public base::RefCountedThreadSafe<ProfileWriter> {
    virtual void AddAutocompleteFormDataEntries(
        const std::vector<autofill::AutocompleteEntry>& autocomplete_entries);
  
-+  // Installs the extensions with the given extension IDs from the Chrome Web Store.
-+  // This is used when importing extensions from another browser profile.
++  // Adds the imported extensions to the profile.
 +  virtual void AddExtensions(const std::vector<std::string>& extension_ids);
 +
   protected:

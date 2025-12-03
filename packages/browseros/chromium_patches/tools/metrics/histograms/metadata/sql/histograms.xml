@@ -1,9 +1,9 @@
 diff --git a/tools/metrics/histograms/metadata/sql/histograms.xml b/tools/metrics/histograms/metadata/sql/histograms.xml
-index f6d78f41135ad..0a13eb99f91cf 100644
+index 785239ad899c0..34ec7f41d2cfe 100644
 --- a/tools/metrics/histograms/metadata/sql/histograms.xml
 +++ b/tools/metrics/histograms/metadata/sql/histograms.xml
-@@ -41,6 +41,7 @@ chromium-metrics-reviews@google.com.
-   <variant name="DIPS" summary="DIPS"/>
+@@ -42,6 +42,7 @@ chromium-metrics-reviews@google.com.
+   <variant name="DownloadRecord" summary="DownloadRecord"/>
    <variant name="FileIndexService" summary="FileIndexService"/>
    <variant name="FirefoxImporter" summary="FirefoxImporter"/>
 +  <variant name="ChromeImporter" summary="ChromeImporter"/>

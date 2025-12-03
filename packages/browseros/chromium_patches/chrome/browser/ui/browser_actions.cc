@@ -1,8 +1,8 @@
 diff --git a/chrome/browser/ui/browser_actions.cc b/chrome/browser/ui/browser_actions.cc
-index 38faf665d9d87..f045fea5635ba 100644
+index fb3dba200be8c..f437fadeb7790 100644
 --- a/chrome/browser/ui/browser_actions.cc
 +++ b/chrome/browser/ui/browser_actions.cc
-@@ -231,6 +231,35 @@ void BrowserActions::InitializeBrowserActions() {
+@@ -253,6 +253,36 @@ void BrowserActions::InitializeBrowserActions() {
              .Build());
    }
  
@@ -10,11 +10,10 @@ index 38faf665d9d87..f045fea5635ba 100644
 +  if (base::FeatureList::IsEnabled(features::kThirdPartyLlmPanel)) {
 +    root_action_item_->AddChild(
 +        SidePanelAction(SidePanelEntryId::kThirdPartyLlm,
-+                        IDS_THIRD_PARTY_LLM_TITLE,  // Using reading list name temporarily
++                        IDS_THIRD_PARTY_LLM_TITLE,
 +                        IDS_THIRD_PARTY_LLM_TITLE,
 +                        vector_icons::kChatOrangeIcon,
-+                        kActionSidePanelShowThirdPartyLlm, browser,
-+                        true)
++                        kActionSidePanelShowThirdPartyLlm, bwi, true)
 +            .Build());
 +  }
 +
@@ -23,11 +22,13 @@ index 38faf665d9d87..f045fea5635ba 100644
 +    root_action_item_->AddChild(
 +        ChromeMenuAction(
 +            base::BindRepeating(
-+                [](Browser* browser, actions::ActionItem* item,
++                [](BrowserWindowInterface* bwi, actions::ActionItem* item,
 +                   actions::ActionInvocationContext context) {
-+                  chrome::ExecuteCommand(browser, IDC_OPEN_CLASH_OF_GPTS);
++                  if (auto* browser_view = BrowserView::GetBrowserViewForBrowser(bwi)) {
++                    chrome::ExecuteCommand(browser_view->browser(), IDC_OPEN_CLASH_OF_GPTS);
++                  }
 +                },
-+                base::Unretained(browser)),
++                bwi),
 +            kActionSidePanelShowClashOfGpts,
 +            IDS_CLASH_OF_GPTS_TITLE,
 +            IDS_CLASH_OF_GPTS_TOOLTIP,

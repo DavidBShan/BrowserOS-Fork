@@ -1,8 +1,8 @@
 diff --git a/components/os_crypt/sync/keychain_password_mac.mm b/components/os_crypt/sync/keychain_password_mac.mm
-index 6b936d228cf71..164325ce05d78 100644
+index 1d4c16a300227..af4b3c4c09eb9 100644
 --- a/components/os_crypt/sync/keychain_password_mac.mm
 +++ b/components/os_crypt/sync/keychain_password_mac.mm
-@@ -33,8 +33,8 @@ namespace {
+@@ -35,8 +35,8 @@ namespace {
  const char kDefaultServiceName[] = "Chrome Safe Storage";
  const char kDefaultAccountName[] = "Chrome";
  #else
@@ -12,4 +12,4 @@ index 6b936d228cf71..164325ce05d78 100644
 +const char kDefaultAccountName[] = "BrowserOS";
  #endif
  
- // Generates a random password and adds it to the Keychain.  The added password
+ // These values are persisted to logs. Entries should not be renumbered and

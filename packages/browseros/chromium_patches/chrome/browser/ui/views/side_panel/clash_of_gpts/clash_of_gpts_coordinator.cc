@@ -1,15 +1,16 @@
 diff --git a/chrome/browser/ui/views/side_panel/clash_of_gpts/clash_of_gpts_coordinator.cc b/chrome/browser/ui/views/side_panel/clash_of_gpts/clash_of_gpts_coordinator.cc
 new file mode 100644
-index 0000000000000..b4f8a66530403
+index 0000000000000..6167eb277556d
 --- /dev/null
 +++ b/chrome/browser/ui/views/side_panel/clash_of_gpts/clash_of_gpts_coordinator.cc
-@@ -0,0 +1,563 @@
+@@ -0,0 +1,568 @@
 +// Copyright 2025 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
 +
 +#include "chrome/browser/ui/views/side_panel/clash_of_gpts/clash_of_gpts_coordinator.h"
 +
++#include "base/check.h"
 +#include "base/functional/bind.h"
 +#include "base/logging.h"
 +#include "base/strings/string_number_conversions.h"
@@ -52,10 +53,11 @@ index 0000000000000..b4f8a66530403
 +}  // namespace
 +
 +ClashOfGptsCoordinator::ClashOfGptsCoordinator(Browser* browser)
-+    : BrowserUserData<ClashOfGptsCoordinator>(*browser) {
++    : browser_(browser) {
++  CHECK(browser_);
 +  // Register for early cleanup notifications
 +  browser_list_observation_.Observe(BrowserList::GetInstance());
-+  profile_observation_.Observe(browser->profile());
++  profile_observation_.Observe(browser_->profile());
 +
 +  // Load shared provider list first
 +  LoadProvidersFromPrefs();
@@ -553,17 +555,20 @@ index 0000000000000..b4f8a66530403
 +}
 +
 +void ClashOfGptsCoordinator::OnBrowserRemoved(Browser* browser) {
-+  if (browser == &GetBrowser()) {
++  if (browser == browser_) {
 +    // Browser is being removed - clean up WebContents early
 +    CleanupWebContents();
 +  }
 +}
 +
 +void ClashOfGptsCoordinator::OnProfileWillBeDestroyed(Profile* profile) {
-+  if (profile == GetBrowser().profile()) {
++  if (profile == browser_->profile()) {
 +    // Profile is being destroyed - clean up WebContents if not already done
 +    CleanupWebContents();
 +  }
 +}
 +
-+BROWSER_USER_DATA_KEY_IMPL(ClashOfGptsCoordinator);
++Browser& ClashOfGptsCoordinator::GetBrowser() const {
++  CHECK(browser_);
++  return *browser_;
++}
