@@ -1,9 +1,9 @@
 diff --git a/chrome/browser/extensions/browseros_external_loader.h b/chrome/browser/extensions/browseros_external_loader.h
 new file mode 100644
-index 0000000000000..33642a2fec9ee
+index 0000000000000..0365a5e231215
 --- /dev/null
 +++ b/chrome/browser/extensions/browseros_external_loader.h
-@@ -0,0 +1,123 @@
+@@ -0,0 +1,128 @@
 +// Copyright 2024 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -88,6 +88,11 @@ index 0000000000000..33642a2fec9ee
 +  
 +  // Re-enables BrowserOS extensions that were disabled by user action
 +  void ReenableDisabledExtensions();
++
++  // Enforces extension enabled/disabled state based on kBrowserOsAlphaFeatures flag.
++  // - When flag is ON: enables kAgentV2ExtensionId, disables kAISidePanelExtensionId
++  // - When flag is OFF: enables kAISidePanelExtensionId, disables kAgentV2ExtensionId
++  void EnforceExtensionStateBasedOnFlag();
 +  
 +  // Triggers immediate installation of all BrowserOS extensions on first start
 +  void TriggerImmediateInstallation();

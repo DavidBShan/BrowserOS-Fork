@@ -33,7 +33,6 @@ def create_build_context(chromium_src: Optional[Path] = None) -> Optional[Contex
             return None
 
         ctx = Context(
-            root_dir=Path.cwd(),
             chromium_src=chromium_src,
             architecture="",  # Not needed for patch operations
             build_type="debug",  # Not needed for patch operations

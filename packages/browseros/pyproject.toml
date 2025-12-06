@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "browseros"
-version = "0.29.0"
+version = "0.0.1"
 description = "BrowserOS Build System"
 requires-python = ">=3.12"
 dependencies = [
@@ -21,18 +21,18 @@ browseros = "build.browseros:app"
 
 [tool.setuptools]
 packages = [
-    "build",
-    "build.cli",
-    "build.common",
-    "build.modules",
-    "build.modules.resources",
-    "build.modules.patches",
-    "build.modules.setup",
-    "build.modules.package",
-    "build.modules.sign",
-    "build.modules.extract",
-    "build.modules.apply",
-    "build.modules.feature"
+  "build",
+  "build.cli",
+  "build.common",
+  "build.modules",
+  "build.modules.resources",
+  "build.modules.patches",
+  "build.modules.setup",
+  "build.modules.package",
+  "build.modules.sign",
+  "build.modules.extract",
+  "build.modules.apply",
+  "build.modules.feature",
 ]
 
 [tool.black]
@@ -65,8 +65,4 @@ line_length = 88
 skip_glob = ["env/*", "chromium_src/*", "chromium_src_bak/*", "third_party/*"]
 
 [dependency-groups]
-dev = [
-    "ruff>=0.14.7",
-    "pyright>=1.1.390",
-]
-
+dev = ["ruff>=0.14.7", "pyright>=1.1.390"]

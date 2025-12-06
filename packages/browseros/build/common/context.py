@@ -20,6 +20,7 @@ from .utils import (
     IS_MACOS,
 )
 from .env import EnvConfig
+from .paths import get_package_root
 
 
 # =============================================================================
@@ -182,7 +183,7 @@ class Context:
     Context Object pattern - ONE place for all build state
     """
 
-    root_dir: Path
+    root_dir: Path = field(default_factory=get_package_root)
     chromium_src: Path = Path()
     out_dir: str = "out/Default"
     architecture: str = ""  # Will be set in __post_init__
@@ -301,9 +302,9 @@ class Context:
         """
         Initialize context from config
         Replaces __post_init__ logic for better testability
-        """
 
-        root_dir = Path(config.get("root_dir", Path.cwd()))
+        Note: root_dir is always computed from package location, never from config.
+        """
         chromium_src = (
             Path(config.get("chromium_src", ""))
             if config.get("chromium_src")
@@ -313,9 +314,8 @@ class Context:
         # Get architecture or use platform default
         arch = config.get("architecture") or get_platform_arch()
 
-        # Create instance
+        # Create instance - root_dir uses default_factory (get_package_root)
         ctx = cls(
-            root_dir=root_dir,
             chromium_src=chromium_src,
             architecture=arch,
             build_type=config.get("build_type", "debug"),

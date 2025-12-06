@@ -264,16 +264,15 @@ def handle_merge_command(
         log_error(f"Architecture 2 app not found: {arch2_path}")
         return False
 
-    # Get root_dir from where this module is located
-    root_dir = Path(__file__).parent.parent.parent.parent
-    log_info(f"📂 Using root directory: {root_dir}")
-
     # Auto-generate output path in chromium source
     # Get the app name from BuildContext
     from ...common.context import Context
+    from ...common.paths import get_package_root
+
+    root_dir = get_package_root()
+    log_info(f"📂 Using root directory: {root_dir}")
 
     temp_ctx = Context(
-        root_dir=root_dir,
         chromium_src=chromium_src,
         architecture="universal",
         build_type="release",

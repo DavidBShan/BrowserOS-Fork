@@ -16,8 +16,10 @@ def _ensure_log_file():
     """Ensure log file is created with timestamp"""
     global _log_file
     if _log_file is None:
+        from .paths import get_package_root
+
         # Create logs directory if it doesn't exist
-        log_dir = Path(__file__).parent.parent / "logs"
+        log_dir = get_package_root() / "logs"
         log_dir.mkdir(exist_ok=True)
 
         # Create log file with timestamp

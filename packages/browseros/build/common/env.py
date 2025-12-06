@@ -16,12 +16,10 @@ from dotenv import load_dotenv
 
 
 def _load_dotenv_file():
-    """Load .env file from project root (packages/browseros parent directory)"""
-    # Find project root by going up from this file's location
-    # This file is at: packages/browseros/build/common/env.py
-    # Project root is at: packages/browseros/../../ (the repo root)
-    current_dir = Path(__file__).parent  # common/
-    browseros_root = current_dir.parent.parent  # packages/browseros/
+    """Load .env file from project root"""
+    from .paths import get_package_root
+
+    browseros_root = get_package_root()
     project_root = browseros_root.parent.parent  # repo root
 
     # Try loading .env from multiple locations (most specific first)

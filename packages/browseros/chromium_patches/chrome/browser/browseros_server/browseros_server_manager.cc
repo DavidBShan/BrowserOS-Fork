@@ -1,9 +1,9 @@
 diff --git a/chrome/browser/browseros_server/browseros_server_manager.cc b/chrome/browser/browseros_server/browseros_server_manager.cc
 new file mode 100644
-index 0000000000000..81ab3d65f5a38
+index 0000000000000..0a3a2d12d08fc
 --- /dev/null
 +++ b/chrome/browser/browseros_server/browseros_server_manager.cc
-@@ -0,0 +1,1072 @@
+@@ -0,0 +1,1076 @@
 +// Copyright 2024 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -315,6 +315,7 @@ index 0000000000000..81ab3d65f5a38
 +void BrowserOSServerManager::SavePortsToPrefs() {
 +  PrefService* prefs = g_browser_process->local_state();
 +  if (!prefs) {
++    LOG(WARNING) << "browseros: SavePortsToPrefs - no prefs available, skipping save";
 +    return;
 +  }
 +
@@ -324,7 +325,10 @@ index 0000000000000..81ab3d65f5a38
 +  prefs->SetInteger(browseros_server::kExtensionServerPort, extension_port_);
 +  prefs->SetBoolean(browseros_server::kMCPServerEnabled, mcp_enabled_);
 +
-+  LOG(INFO) << "browseros: Saved finalized ports to prefs";
++  LOG(INFO) << "browseros: Saving to prefs - CDP: " << cdp_port_
++            << ", MCP: " << mcp_port_ << ", Agent: " << agent_port_
++            << ", Extension: " << extension_port_
++            << ", MCP enabled: " << (mcp_enabled_ ? "true" : "false");
 +}
 +
 +void BrowserOSServerManager::Start() {

@@ -30,14 +30,12 @@ from .utils import get_platform_arch, log_info
 def resolve_config(
     cli_args: Dict[str, Any],
     yaml_config: Optional[Dict[str, Any]] = None,
-    root_dir: Optional[Path] = None,
 ) -> Context:
     """Resolve build configuration - single entry point.
 
     Args:
         cli_args: Dictionary of CLI arguments (all values should be None if not provided)
         yaml_config: Optional YAML configuration (triggers CONFIG mode)
-        root_dir: Optional root directory (defaults to CWD)
 
     Returns:
         Fully resolved Context object
@@ -48,24 +46,25 @@ def resolve_config(
     Modes:
         - CONFIG mode (yaml_config provided): YAML is authoritative
         - DIRECT mode (no yaml_config): CLI > Env > Defaults
-    """
-    root_dir = root_dir or Path.cwd()
 
+    Note:
+        root_dir is always computed from package location via get_package_root(),
+        never from config or cwd.
+    """
     if yaml_config:
-        return _resolve_config_mode(yaml_config, cli_args, root_dir)
+        return _resolve_config_mode(yaml_config, cli_args)
     else:
-        return _resolve_direct_mode(cli_args, root_dir)
+        return _resolve_direct_mode(cli_args)
 
 
 def _resolve_config_mode(
-    yaml_config: Dict[str, Any], cli_args: Dict[str, Any], root_dir: Path
+    yaml_config: Dict[str, Any], cli_args: Dict[str, Any]
 ) -> Context:
     """CONFIG MODE: YAML is base, CLI can override.
 
     Args:
         yaml_config: YAML configuration dictionary
         cli_args: CLI arguments (can override YAML values)
-        root_dir: Project root directory
 
     Returns:
         Context with values from YAML, optionally overridden by CLI
@@ -116,19 +115,17 @@ def _resolve_config_mode(
     log_info(f"✓ CONFIG MODE: build_type={build_type} ({build_type_source})")
 
     return Context(
-        root_dir=root_dir,
         chromium_src=chromium_src,
         architecture=architecture,
         build_type=build_type,
     )
 
 
-def _resolve_direct_mode(cli_args: Dict[str, Any], root_dir: Path) -> Context:
+def _resolve_direct_mode(cli_args: Dict[str, Any]) -> Context:
     """DIRECT MODE: CLI > Env > Defaults.
 
     Args:
         cli_args: CLI arguments (None if not provided by user)
-        root_dir: Project root directory
 
     Returns:
         Context with resolved values
@@ -171,7 +168,6 @@ def _resolve_direct_mode(cli_args: Dict[str, Any], root_dir: Path) -> Context:
     log_info(f"✓ DIRECT MODE: build_type={build_type} (cli/default)")
 
     return Context(
-        root_dir=root_dir,
         chromium_src=chromium_src,
         architecture=architecture,
         build_type=build_type,

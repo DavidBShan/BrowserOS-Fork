@@ -1,9 +1,9 @@
 diff --git a/chrome/browser/extensions/browseros_extension_constants.h b/chrome/browser/extensions/browseros_extension_constants.h
 new file mode 100644
-index 0000000000000..e2ffd24bff8d5
+index 0000000000000..5a3b518b224a7
 --- /dev/null
 +++ b/chrome/browser/extensions/browseros_extension_constants.h
-@@ -0,0 +1,118 @@
+@@ -0,0 +1,120 @@
 +// Copyright 2024 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -27,6 +27,12 @@ index 0000000000000..e2ffd24bff8d5
 +inline constexpr char kAgentV2ExtensionId[] =
 +    "bflpfmnmnokmjhmgnolecpppdbdophmk";
 +
++// BrowserOS extension config URLs
++inline constexpr char kBrowserOSConfigUrl[] =
++    "https://cdn.browseros.com/extensions/extensions.json";
++inline constexpr char kBrowserOSAlphaConfigUrl[] =
++    "https://cdn.browseros.com/extensions/extensions.alpha.json";
++
 +// Bug Reporter Extension ID
 +inline constexpr char kBugReporterExtensionId[] =
 +    "adlpneommgkgeanpaekgoaolcpncohkf";
@@ -41,10 +47,6 @@ index 0000000000000..e2ffd24bff8d5
 +inline constexpr char kBrowserOSUpdateUrl[] =
 +    "https://cdn.browseros.com/extensions/update-manifest.xml";
 +
-+// BrowserOS extension config URL
-+inline constexpr char kBrowserOSConfigUrl[] =
-+    "https://cdn.browseros.com/extensions/extensions.json";
-+
 +struct BrowserOSExtensionInfo {
 +  const char* id;
 +  const char* display_name;
@@ -56,7 +58,7 @@ index 0000000000000..e2ffd24bff8d5
 +    {kAISidePanelExtensionId, "BrowserOS", true, true},
 +    {kBugReporterExtensionId, "BrowserOS/bug-reporter", true, false},
 +    {kControllerExtensionId, "BrowserOS/controller", false, false},
-+    {kAgentV2ExtensionId, "BrowserOS", false, false},
++    {kAgentV2ExtensionId, "BrowserOS", true, true},
 +};
 +
 +// Allowlist of BrowserOS extension IDs that are permitted to be installed.
