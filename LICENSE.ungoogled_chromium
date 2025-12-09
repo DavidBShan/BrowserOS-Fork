@@ -1,6 +1,6 @@
-The following license governs all ungoogled-chromium patches located in packages/browseros/series_patches/windows/ungoogled-chromium and packages/browseros/series_patches/ungoogled-chromium.
+BSD 3-Clause License (only for ungoogled chromium patches)
 
-BSD 3-Clause License
+The following license governs all ungoogled-chromium patches located in packages/browseros/series_patches/windows/ungoogled-chromium and packages/browseros/series_patches/ungoogled-chromium.
 
 Copyright (c) 2015-2023, The ungoogled-chromium Authors
 All rights reserved.
