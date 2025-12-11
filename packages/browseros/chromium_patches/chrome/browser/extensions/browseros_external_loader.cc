@@ -1,9 +1,9 @@
 diff --git a/chrome/browser/extensions/browseros_external_loader.cc b/chrome/browser/extensions/browseros_external_loader.cc
 new file mode 100644
-index 0000000000000..ac49a85ada194
+index 0000000000000..61e57851b9178
 --- /dev/null
 +++ b/chrome/browser/extensions/browseros_external_loader.cc
-@@ -0,0 +1,661 @@
+@@ -0,0 +1,667 @@
 +// Copyright 2024 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -13,6 +13,7 @@ index 0000000000000..ac49a85ada194
 +#include <memory>
 +#include <utility>
 +
++#include "base/feature_list.h"
 +#include "base/files/file_util.h"
 +#include "base/functional/bind.h"
 +#include "base/json/json_reader.h"
@@ -22,6 +23,7 @@ index 0000000000000..ac49a85ada194
 +#include "base/task/thread_pool.h"
 +#include "base/task/single_thread_task_runner.h"
 +#include "base/values.h"
++#include "chrome/browser/browser_features.h"
 +#include "chrome/browser/browser_process.h"
 +#include "chrome/browser/extensions/browseros_extension_constants.h"
 +#include "chrome/browser/extensions/extension_service.h"
@@ -94,7 +96,11 @@ index 0000000000000..ac49a85ada194
 +
 +BrowserOSExternalLoader::BrowserOSExternalLoader(Profile* profile)
 +    : profile_(profile) {
-+  config_url_ = GURL(browseros::kBrowserOSConfigUrl);
++  if (base::FeatureList::IsEnabled(features::kBrowserOsAlphaFeatures)) {
++    config_url_ = GURL(browseros::kBrowserOSAlphaConfigUrl);
++  } else {
++    config_url_ = GURL(browseros::kBrowserOSConfigUrl);
++  }
 +
 +  for (const char* extension_id : browseros::kAllowedExtensions) {
 +    browseros_extension_ids_.insert(extension_id);
