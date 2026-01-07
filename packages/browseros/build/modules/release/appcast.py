@@ -4,7 +4,7 @@
 from ...common.context import Context
 from ...common.module import CommandModule, ValidationError
 from ...common.utils import log_info, log_warning
-from ..upload import BOTO3_AVAILABLE
+from ..storage import BOTO3_AVAILABLE
 from .common import fetch_all_release_metadata, generate_appcast_item
 
 

@@ -108,7 +108,7 @@ class UniversalBuildModule(CommandModule):
         # Import sign/package/upload modules
         from ..sign.macos import MacOSSignModule
         from ..package.macos import MacOSPackageModule
-        from ..upload import UploadModule
+        from ..storage import UploadModule
 
         # Clean all build directories before starting
         self._clean_build_directories(ctx)

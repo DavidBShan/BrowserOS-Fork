@@ -4,7 +4,7 @@
 from ...common.context import Context
 from ...common.module import CommandModule, ValidationError
 from ...common.utils import log_info
-from ..upload import BOTO3_AVAILABLE
+from ..storage import BOTO3_AVAILABLE
 from .common import (
     PLATFORMS,
     PLATFORM_DISPLAY_NAMES,

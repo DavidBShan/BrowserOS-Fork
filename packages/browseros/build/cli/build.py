@@ -44,7 +44,7 @@ from ..modules.resources.chromium_replace import ChromiumReplaceModule
 from ..modules.resources.string_replaces import StringReplacesModule
 from ..modules.resources.resources import ResourcesModule
 from ..modules.extensions import BundledExtensionsModule
-from ..modules.upload import UploadModule
+from ..modules.storage import UploadModule, DownloadResourcesModule
 
 # Platform-specific modules (imported unconditionally - validation handles platform checks)
 from ..modules.sign.macos import MacOSSignModule
@@ -66,6 +66,7 @@ AVAILABLE_MODULES = {
     "series_patches": SeriesPatchesModule,
     "chromium_replace": ChromiumReplaceModule,
     "string_replaces": StringReplacesModule,
+    "download_resources": DownloadResourcesModule,  # Download binaries from R2
     "resources": ResourcesModule,
     "bundled_extensions": BundledExtensionsModule,
     # Build
@@ -80,7 +81,7 @@ AVAILABLE_MODULES = {
     "package_macos": MacOSPackageModule,
     "package_windows": WindowsPackageModule,
     "package_linux": LinuxPackageModule,
-    # Upload
+    # Storage (upload/download)
     "upload": UploadModule,
 }
 
@@ -119,6 +120,7 @@ EXECUTION_ORDER = [
     (
         "prep",
         [
+            "download_resources",
             "resources",
             "bundled_extensions",
             "chromium_replace",

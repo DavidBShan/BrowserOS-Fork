@@ -32,7 +32,7 @@ from .sign_binary import (
     sign_windows_binary,
     get_entitlements_path,
 )
-from ..upload import get_r2_client, upload_file_to_r2
+from ..storage import get_r2_client, upload_file_to_r2
 
 
 class ServerOTAModule(CommandModule):

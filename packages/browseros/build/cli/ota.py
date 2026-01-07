@@ -17,7 +17,7 @@ from ..modules.ota.common import (
     get_appcast_path,
     SERVER_PLATFORMS,
 )
-from ..modules.upload import get_r2_client, upload_file_to_r2
+from ..modules.storage import get_r2_client, upload_file_to_r2
 
 app = typer.Typer(
     help="OTA (Over-The-Air) update automation",

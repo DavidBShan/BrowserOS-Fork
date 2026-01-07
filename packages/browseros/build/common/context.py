@@ -409,6 +409,10 @@ class Context:
         """Get copy resources configuration file"""
         return join_paths(self.get_config_dir(), "copy_resources.yaml")
 
+    def get_download_resources_config(self) -> Path:
+        """Get download resources configuration file"""
+        return join_paths(self.get_config_dir(), "download_resources.yaml")
+
     def get_sparkle_dir(self) -> Path:
         """Get Sparkle directory"""
         return join_paths(self.chromium_src, "third_party", "sparkle")

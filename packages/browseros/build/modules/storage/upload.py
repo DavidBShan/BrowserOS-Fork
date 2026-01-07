@@ -1,34 +1,28 @@
 #!/usr/bin/env python3
-"""Cloudflare R2 upload module for BrowserOS build artifacts"""
+"""Upload module for BrowserOS build artifacts to Cloudflare R2"""
 
 import json
-import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from ..common.module import CommandModule, ValidationError
-from ..common.context import Context
-from ..common.env import EnvConfig
-from ..common.utils import (
+from ...common.module import CommandModule, ValidationError
+from ...common.context import Context
+from ...common.utils import (
     log_info,
     log_error,
     log_success,
     log_warning,
     IS_WINDOWS,
     IS_MACOS,
-    IS_LINUX,
 )
-from ..common.notify import get_notifier, COLOR_GREEN
+from ...common.notify import get_notifier, COLOR_GREEN
 
-# Try to import boto3 for R2 (S3-compatible)
-try:
-    import boto3
-    from botocore.config import Config
-
-    BOTO3_AVAILABLE = True
-except ImportError:
-    BOTO3_AVAILABLE = False
+from .r2 import (
+    BOTO3_AVAILABLE,
+    get_r2_client,
+    upload_file_to_r2,
+)
 
 
 def _get_platform() -> str:
@@ -61,9 +55,8 @@ class UploadModule(CommandModule):
             )
 
     def execute(self, ctx: Context) -> None:
-        log_info("\n☁️  Uploading package artifacts to R2...")
+        log_info("\nUploading package artifacts to R2...")
 
-        # Build extra metadata from sparkle signatures if available
         extra_metadata = {}
         sparkle_signatures = ctx.artifacts.get("sparkle_signatures")
         if sparkle_signatures:
@@ -76,57 +69,6 @@ class UploadModule(CommandModule):
         success, release_json = upload_release_artifacts(ctx, extra_metadata)
         if not success:
             raise RuntimeError("Failed to upload artifacts to R2")
-
-
-def get_r2_client(env: Optional[EnvConfig] = None):
-    """Create boto3 S3 client configured for R2
-
-    Args:
-        env: Optional EnvConfig instance. If not provided, creates a new one.
-    """
-    if env is None:
-        env = EnvConfig()
-
-    if not env.has_r2_config():
-        return None
-
-    return boto3.client(
-        "s3",
-        endpoint_url=env.r2_endpoint_url,
-        aws_access_key_id=env.r2_access_key_id,
-        aws_secret_access_key=env.r2_secret_access_key,
-        config=Config(
-            signature_version="s3v4",
-            retries={"max_attempts": 3, "mode": "standard"},
-        ),
-    )
-
-
-def upload_file_to_r2(
-    client,
-    local_path: Path,
-    r2_key: str,
-    bucket: str,
-) -> bool:
-    """Upload a single file to R2
-
-    Args:
-        client: boto3 S3 client
-        local_path: Path to local file
-        r2_key: Key (path) in R2 bucket
-        bucket: R2 bucket name
-
-    Returns:
-        True if successful, False otherwise
-    """
-    try:
-        log_info(f"📤 Uploading {local_path.name}...")
-        client.upload_file(str(local_path), bucket, r2_key)
-        log_success(f"✓ Uploaded: {r2_key}")
-        return True
-    except Exception as e:
-        log_error(f"Failed to upload {local_path.name}: {e}")
-        return False
 
 
 def generate_release_json(
@@ -155,26 +97,22 @@ def generate_release_json(
         "artifacts": {},
     }
 
-    # Add sparkle_version for macOS
     if platform == "macos":
         release_data["sparkle_version"] = ctx.get_sparkle_version()
 
-    # Build artifacts dict
     base_url = f"{env.r2_cdn_base_url}/{ctx.get_release_path(platform)}"
 
     for artifact in artifacts:
         filename = artifact["filename"]
         artifact_key = _get_artifact_key(filename, platform)
 
-        # Start with base fields
         artifact_data = {
             "filename": filename,
             "url": f"{base_url}{filename}",
         }
 
-        # Add all other fields from artifact metadata
         for key, value in artifact.items():
-            if key != "filename":  # filename already handled
+            if key != "filename":
                 artifact_data[key] = value
 
         release_data["artifacts"][artifact_key] = artifact_data
@@ -214,7 +152,6 @@ def _get_artifact_key(filename: str, platform: str) -> str:
         elif ".deb" in lower:
             return "x64_deb"
 
-    # Fallback: use filename without extension
     return Path(filename).stem
 
 
@@ -267,7 +204,6 @@ def upload_release_artifacts(
         log_warning("R2 configuration not set. Skipping upload.")
         return True, None
 
-    # Detect artifacts
     artifacts = detect_artifacts(ctx)
     if not artifacts:
         log_info("No artifacts found to upload")
@@ -276,18 +212,16 @@ def upload_release_artifacts(
     platform = _get_platform()
     release_path = ctx.get_release_path(platform)
 
-    log_info(f"\n☁️  Uploading to R2: {env.r2_bucket}/{release_path}")
-    log_info(f"📦 Found {len(artifacts)} artifact(s):")
+    log_info(f"\nUploading to R2: {env.r2_bucket}/{release_path}")
+    log_info(f"Found {len(artifacts)} artifact(s):")
     for artifact in artifacts:
         log_info(f"  - {artifact.name}")
 
-    # Create R2 client
     client = get_r2_client(env)
     if not client:
         log_error("Failed to create R2 client")
         return False, None
 
-    # Upload artifacts and collect metadata
     artifact_metadata = []
     for artifact_path in artifacts:
         r2_key = f"{release_path}{artifact_path.name}"
@@ -300,13 +234,11 @@ def upload_release_artifacts(
             "size": artifact_path.stat().st_size,
         }
 
-        # Merge extra metadata if available for this file
         if extra_metadata and artifact_path.name in extra_metadata:
             metadata.update(extra_metadata[artifact_path.name])
 
         artifact_metadata.append(metadata)
 
-    # Generate and upload release.json
     release_data = generate_release_json(ctx, artifact_metadata, platform)
     release_json_path = ctx.get_dist_dir() / "release.json"
     release_json_path.write_text(json.dumps(release_data, indent=2))
@@ -315,21 +247,19 @@ def upload_release_artifacts(
     if not upload_file_to_r2(client, release_json_path, r2_key, env.r2_bucket):
         return False, None
 
-    # Print summary
-    log_success(f"\n☁️  Successfully uploaded {len(artifacts)} artifact(s) to R2")
-    log_info(f"\n📋 Release metadata:")
+    log_success(f"\nSuccessfully uploaded {len(artifacts)} artifact(s) to R2")
+    log_info(f"\nRelease metadata:")
     log_info(f"  Version: {release_data['version']}")
     if platform == "macos":
         log_info(f"  Sparkle version: {release_data.get('sparkle_version', 'N/A')}")
     log_info(f"  Artifacts: {list(release_data['artifacts'].keys())}")
 
-    # Send Slack notification with artifact URLs
     notifier = get_notifier()
     artifact_urls = [
         f"{a['filename']}: {a['url']}" for a in release_data["artifacts"].values()
     ]
     notifier.notify(
-        "☁️ Upload Complete",
+        "Upload Complete",
         f"Uploaded {len(artifacts)} artifact(s) to R2",
         {
             "Version": release_data["version"],
@@ -340,91 +270,3 @@ def upload_release_artifacts(
     )
 
     return True, release_data
-
-
-def download_from_r2(
-    r2_key: str,
-    dest_path: Path,
-    bucket: Optional[str] = None,
-    env: Optional[EnvConfig] = None,
-) -> bool:
-    """Download a file from R2
-
-    Args:
-        r2_key: Key (path) in R2 bucket
-        dest_path: Local destination path
-        bucket: Optional bucket name (uses default from env if not specified)
-        env: Optional EnvConfig instance. If not provided, creates a new one.
-
-    Returns:
-        True if successful, False otherwise
-    """
-    if not BOTO3_AVAILABLE:
-        log_error("boto3 not installed")
-        return False
-
-    if env is None:
-        env = EnvConfig()
-
-    if not env.has_r2_config():
-        log_error("R2 configuration not set")
-        return False
-
-    client = get_r2_client(env)
-    if not client:
-        return False
-
-    bucket = bucket or env.r2_bucket
-
-    try:
-        log_info(f"📥 Downloading {r2_key}...")
-        client.download_file(bucket, r2_key, str(dest_path))
-        log_success(f"Downloaded to: {dest_path}")
-        return True
-    except Exception as e:
-        log_error(f"Failed to download from R2: {e}")
-        return False
-
-
-def get_release_json(
-    version: str,
-    platform: str,
-    env: Optional[EnvConfig] = None,
-) -> Optional[Dict]:
-    """Fetch release.json for a specific version and platform from R2
-
-    Args:
-        version: Semantic version (e.g., "0.31.0")
-        platform: Platform name (macos, win, linux)
-        env: Optional EnvConfig instance. If not provided, creates a new one.
-
-    Returns:
-        Parsed release.json dict, or None if not found
-    """
-    if not BOTO3_AVAILABLE:
-        log_error("boto3 not installed")
-        return None
-
-    if env is None:
-        env = EnvConfig()
-
-    if not env.has_r2_config():
-        log_error("R2 configuration not set")
-        return None
-
-    client = get_r2_client(env)
-    if not client:
-        return None
-
-    r2_key = f"releases/{version}/{platform}/release.json"
-
-    try:
-        response = client.get_object(Bucket=env.r2_bucket, Key=r2_key)
-        content = response["Body"].read().decode("utf-8")
-        return json.loads(content)
-    except client.exceptions.NoSuchKey:
-        log_warning(f"release.json not found: {r2_key}")
-        return None
-    except Exception as e:
-        log_error(f"Failed to fetch release.json: {e}")
-        return None

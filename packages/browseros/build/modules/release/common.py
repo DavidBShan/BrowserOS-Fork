@@ -7,7 +7,7 @@ from typing import Dict, List, Optional
 
 from ...common.env import EnvConfig
 from ...common.utils import log_warning
-from ..upload import get_release_json, get_r2_client, BOTO3_AVAILABLE
+from ..storage import get_release_json, get_r2_client, BOTO3_AVAILABLE
 
 PLATFORMS = ["macos", "win", "linux"]
 PLATFORM_DISPLAY_NAMES = {"macos": "macOS", "win": "Windows", "linux": "Linux"}

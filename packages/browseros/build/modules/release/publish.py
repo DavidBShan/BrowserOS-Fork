@@ -6,7 +6,7 @@ from typing import Dict, List, Tuple
 from ...common.context import Context
 from ...common.module import CommandModule, ValidationError
 from ...common.utils import log_info, log_error, log_success, log_warning
-from ..upload import BOTO3_AVAILABLE, get_r2_client
+from ..storage import BOTO3_AVAILABLE, get_r2_client
 from .common import (
     PLATFORMS,
     PLATFORM_DISPLAY_NAMES,
