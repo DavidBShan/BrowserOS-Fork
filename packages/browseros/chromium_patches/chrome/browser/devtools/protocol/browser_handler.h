@@ -1,5 +1,5 @@
 diff --git a/chrome/browser/devtools/protocol/browser_handler.h b/chrome/browser/devtools/protocol/browser_handler.h
-index e1424aa52cbf6..abf25c19d5d48 100644
+index e1424aa52cbf6..947af3378ab68 100644
 --- a/chrome/browser/devtools/protocol/browser_handler.h
 +++ b/chrome/browser/devtools/protocol/browser_handler.h
 @@ -5,9 +5,13 @@
@@ -31,7 +31,7 @@ index e1424aa52cbf6..abf25c19d5d48 100644
    protocol::Response GetWindowBounds(
        int window_id,
        std::unique_ptr<protocol::Browser::Bounds>* out_bounds) override;
-@@ -41,9 +53,84 @@ class BrowserHandler : public protocol::Browser::Backend {
+@@ -41,9 +53,112 @@ class BrowserHandler : public protocol::Browser::Backend {
    protocol::Response AddPrivacySandboxEnrollmentOverride(
        const std::string& in_url) override;
  
@@ -108,6 +108,34 @@ index e1424aa52cbf6..abf25c19d5d48 100644
 +      std::optional<std::string> target_id,
 +      std::optional<int> tab_id,
 +      std::unique_ptr<protocol::Browser::TabInfo>* out_tab) override;
++
++  // Tab group management
++  protocol::Response GetTabGroups(
++      std::optional<int> window_id,
++      std::unique_ptr<protocol::Array<protocol::Browser::TabGroupInfo>>*
++          out_groups) override;
++  protocol::Response CreateTabGroup(
++      std::unique_ptr<protocol::Array<int>> tab_ids,
++      std::optional<std::string> title,
++      std::unique_ptr<protocol::Browser::TabGroupInfo>* out_group) override;
++  protocol::Response UpdateTabGroup(
++      const std::string& group_id,
++      std::optional<std::string> title,
++      std::optional<std::string> color,
++      std::optional<bool> collapsed,
++      std::unique_ptr<protocol::Browser::TabGroupInfo>* out_group) override;
++  protocol::Response CloseTabGroup(const std::string& group_id) override;
++  protocol::Response AddTabsToGroup(
++      const std::string& group_id,
++      std::unique_ptr<protocol::Array<int>> tab_ids,
++      std::unique_ptr<protocol::Browser::TabGroupInfo>* out_group) override;
++  protocol::Response RemoveTabsFromGroup(
++      std::unique_ptr<protocol::Array<int>> tab_ids) override;
++  protocol::Response MoveTabGroup(
++      const std::string& group_id,
++      std::optional<int> window_id,
++      std::optional<int> index,
++      std::unique_ptr<protocol::Browser::TabGroupInfo>* out_group) override;
 +
   private:
    base::flat_set<std::string> contexts_with_overridden_permissions_;

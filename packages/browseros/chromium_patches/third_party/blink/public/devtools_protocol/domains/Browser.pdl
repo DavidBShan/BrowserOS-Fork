@@ -1,5 +1,5 @@
 diff --git a/third_party/blink/public/devtools_protocol/domains/Browser.pdl b/third_party/blink/public/devtools_protocol/domains/Browser.pdl
-index 6015a94554c21..9e861e3468c3e 100644
+index 6015a94554c21..a25c14c912689 100644
 --- a/third_party/blink/public/devtools_protocol/domains/Browser.pdl
 +++ b/third_party/blink/public/devtools_protocol/domains/Browser.pdl
 @@ -8,6 +8,16 @@
@@ -19,7 +19,7 @@ index 6015a94554c21..9e861e3468c3e 100644
  
    # The state of the browser window.
    experimental type WindowState extends string
-@@ -31,6 +41,161 @@ domain Browser
+@@ -31,6 +41,228 @@ domain Browser
        # The window state. Default to normal.
        optional WindowState windowState
  
@@ -48,6 +48,19 @@ index 6015a94554c21..9e861e3468c3e 100644
 +      optional WindowID windowId
 +      optional integer index
 +      optional BrowserContextID browserContextId
++      optional TabGroupID groupId
++
++  experimental type TabGroupID extends string
++
++  experimental type TabGroupInfo extends object
++    properties
++      TabGroupID groupId
++      WindowID windowId
++      string title
++      # Auto-assigned color name (grey, blue, red, yellow, green, pink, purple, cyan, orange).
++      string color
++      boolean collapsed
++      array of TabID tabIds
 +
 +  # --- Window Management ---
 +
@@ -178,10 +191,64 @@ index 6015a94554c21..9e861e3468c3e 100644
 +    returns
 +      TabInfo tab
 +
++  # --- Tab Group Management ---
++
++  # Get all tab groups across all windows (or a specific window).
++  experimental command getTabGroups
++    parameters
++      optional WindowID windowId
++    returns
++      array of TabGroupInfo groups
++
++  # Create a new tab group from the given tabs. Color is auto-assigned.
++  experimental command createTabGroup
++    parameters
++      array of TabID tabIds
++      optional string title
++    returns
++      TabGroupInfo group
++
++  # Update a tab group's properties. Omitted fields are preserved.
++  experimental command updateTabGroup
++    parameters
++      TabGroupID groupId
++      optional string title
++      optional string color
++      optional boolean collapsed
++    returns
++      TabGroupInfo group
++
++  # Close all tabs in a group, destroying the group.
++  experimental command closeTabGroup
++    parameters
++      TabGroupID groupId
++
++  # Add tabs to an existing group.
++  experimental command addTabsToGroup
++    parameters
++      TabGroupID groupId
++      array of TabID tabIds
++    returns
++      TabGroupInfo group
++
++  # Remove tabs from their group (tabs remain open, just ungrouped).
++  experimental command removeTabsFromGroup
++    parameters
++      array of TabID tabIds
++
++  # Move a tab group to a new position or window.
++  experimental command moveTabGroup
++    parameters
++      TabGroupID groupId
++      optional WindowID windowId
++      optional integer index
++    returns
++      TabGroupInfo group
++
    experimental type PermissionType extends string
      enum
        ar
-@@ -294,6 +459,28 @@ domain Browser
+@@ -294,6 +526,28 @@ domain Browser
        # position and size are returned.
        Bounds bounds
  

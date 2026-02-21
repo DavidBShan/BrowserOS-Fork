@@ -1,5 +1,5 @@
 diff --git a/chrome/browser/devtools/protocol/browser_handler_android.cc b/chrome/browser/devtools/protocol/browser_handler_android.cc
-index 82199c6e2e93b..aa966849fcc8d 100644
+index 82199c6e2e93b..628cc138aa267 100644
 --- a/chrome/browser/devtools/protocol/browser_handler_android.cc
 +++ b/chrome/browser/devtools/protocol/browser_handler_android.cc
 @@ -11,6 +11,7 @@
@@ -70,7 +70,7 @@ index 82199c6e2e93b..aa966849fcc8d 100644
  Response BrowserHandlerAndroid::GetWindowBounds(
      int window_id,
      std::unique_ptr<protocol::Browser::Bounds>* out_bounds) {
-@@ -92,3 +146,135 @@ protocol::Response BrowserHandlerAndroid::AddPrivacySandboxEnrollmentOverride(
+@@ -92,3 +146,184 @@ protocol::Response BrowserHandlerAndroid::AddPrivacySandboxEnrollmentOverride(
      const std::string& in_url) {
    return Response::MethodNotFound(kNotImplemented);
  }
@@ -204,5 +204,54 @@ index 82199c6e2e93b..aa966849fcc8d 100644
 +    std::optional<std::string> target_id,
 +    std::optional<int> tab_id,
 +    std::unique_ptr<protocol::Browser::TabInfo>* out_tab) {
++  return Response::MethodNotFound(kNotImplemented);
++}
++
++// --- Tab Group Management (all stubs) ---
++
++Response BrowserHandlerAndroid::GetTabGroups(
++    std::optional<int> window_id,
++    std::unique_ptr<protocol::Array<protocol::Browser::TabGroupInfo>>*
++        out_groups) {
++  return Response::MethodNotFound(kNotImplemented);
++}
++
++Response BrowserHandlerAndroid::CreateTabGroup(
++    std::unique_ptr<protocol::Array<int>> tab_ids,
++    std::optional<std::string> title,
++    std::unique_ptr<protocol::Browser::TabGroupInfo>* out_group) {
++  return Response::MethodNotFound(kNotImplemented);
++}
++
++Response BrowserHandlerAndroid::UpdateTabGroup(
++    const std::string& group_id,
++    std::optional<std::string> title,
++    std::optional<std::string> color,
++    std::optional<bool> collapsed,
++    std::unique_ptr<protocol::Browser::TabGroupInfo>* out_group) {
++  return Response::MethodNotFound(kNotImplemented);
++}
++
++Response BrowserHandlerAndroid::CloseTabGroup(const std::string& group_id) {
++  return Response::MethodNotFound(kNotImplemented);
++}
++
++Response BrowserHandlerAndroid::AddTabsToGroup(
++    const std::string& group_id,
++    std::unique_ptr<protocol::Array<int>> tab_ids,
++    std::unique_ptr<protocol::Browser::TabGroupInfo>* out_group) {
++  return Response::MethodNotFound(kNotImplemented);
++}
++
++Response BrowserHandlerAndroid::RemoveTabsFromGroup(
++    std::unique_ptr<protocol::Array<int>> tab_ids) {
++  return Response::MethodNotFound(kNotImplemented);
++}
++
++Response BrowserHandlerAndroid::MoveTabGroup(
++    const std::string& group_id,
++    std::optional<int> window_id,
++    std::optional<int> index,
++    std::unique_ptr<protocol::Browser::TabGroupInfo>* out_group) {
 +  return Response::MethodNotFound(kNotImplemented);
 +}

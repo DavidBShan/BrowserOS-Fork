@@ -1,13 +1,41 @@
 diff --git a/chrome/browser/devtools/BUILD.gn b/chrome/browser/devtools/BUILD.gn
-index 4fc39e878028e..41c3c73e1b5c2 100644
+index 4fc39e878028e..9a7fb91ab49e8 100644
 --- a/chrome/browser/devtools/BUILD.gn
 +++ b/chrome/browser/devtools/BUILD.gn
-@@ -388,6 +388,8 @@ static_library("devtools") {
+@@ -34,6 +34,10 @@ if (enable_devtools_frontend) {
+     "protocol/emulation.h",
+     "protocol/page.cc",
+     "protocol/page.h",
++    "protocol/bookmarks.cc",
++    "protocol/bookmarks.h",
++    "protocol/history.cc",
++    "protocol/history.h",
+     "protocol/pwa.cc",
+     "protocol/pwa.h",
+     "protocol/security.cc",
+@@ -372,7 +376,10 @@ static_library("devtools") {
+       "//components/media_router/browser",
+       "//components/media_router/common/mojom:media_router",
+       "//components/payments/content",
++      "//components/bookmarks/browser",
++      "//components/history/core/browser",
+       "//components/privacy_sandbox/privacy_sandbox_attestations",
++      "//components/tab_groups",
+       "//components/security_state/content",
+       "//components/subresource_filter/content/browser",
+       "//components/web_package",
+@@ -386,8 +393,14 @@ static_library("devtools") {
+     sources += [
+       "protocol/autofill_handler.cc",
        "protocol/autofill_handler.h",
++      "protocol/bookmarks_handler.cc",
++      "protocol/bookmarks_handler.h",
        "protocol/browser_handler.cc",
        "protocol/browser_handler.h",
 +      "protocol/hidden_tab_manager.cc",
 +      "protocol/hidden_tab_manager.h",
++      "protocol/history_handler.cc",
++      "protocol/history_handler.h",
        "protocol/cast_handler.cc",
        "protocol/cast_handler.h",
        "protocol/emulation_handler.cc",

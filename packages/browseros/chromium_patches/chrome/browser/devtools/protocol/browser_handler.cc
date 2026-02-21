@@ -1,8 +1,8 @@
 diff --git a/chrome/browser/devtools/protocol/browser_handler.cc b/chrome/browser/devtools/protocol/browser_handler.cc
-index 30bd52d09c3fc..e374fc071f8d2 100644
+index 30bd52d09c3fc..053af0b50b3d7 100644
 --- a/chrome/browser/devtools/protocol/browser_handler.cc
 +++ b/chrome/browser/devtools/protocol/browser_handler.cc
-@@ -8,19 +8,27 @@
+@@ -8,19 +8,32 @@
  #include <vector>
  
  #include "base/functional/bind.h"
@@ -25,12 +25,17 @@ index 30bd52d09c3fc..e374fc071f8d2 100644
  #include "chrome/browser/ui/exclusive_access/exclusive_access_context.h"
 +#include "chrome/browser/ui/tabs/tab_enums.h"
  #include "chrome/browser/ui/tabs/tab_strip_model.h"
++#include "chrome/browser/ui/tabs/tab_group_model.h"
++#include "components/tabs/public/tab_group.h"
  #include "components/privacy_sandbox/privacy_sandbox_attestations/privacy_sandbox_attestations.h"
 +#include "components/sessions/content/session_tab_helper.h"
++#include "components/tab_groups/tab_group_color.h"
++#include "components/tab_groups/tab_group_id.h"
++#include "components/tab_groups/tab_group_visual_data.h"
  #include "content/public/browser/browser_task_traits.h"
  #include "content/public/browser/browser_thread.h"
  #include "content/public/browser/devtools_agent_host.h"
-@@ -72,11 +80,242 @@ std::unique_ptr<protocol::Browser::Bounds> GetBrowserWindowBounds(
+@@ -72,11 +85,403 @@ std::unique_ptr<protocol::Browser::Bounds> GetBrowserWindowBounds(
        .Build();
  }
  
@@ -120,6 +125,10 @@ index 30bd52d09c3fc..e374fc071f8d2 100644
 +  return info;
 +}
 +
++std::string SerializeGroupId(const tab_groups::TabGroupId& id) {
++  return id.token().ToString();
++}
++
 +std::unique_ptr<protocol::Browser::TabInfo> BuildTabInfo(
 +    content::WebContents* wc,
 +    BrowserWindowInterface* bwi,
@@ -152,6 +161,11 @@ index 30bd52d09c3fc..e374fc071f8d2 100644
 +  if (!is_hidden && bwi) {
 +    info->SetWindowId(bwi->GetSessionID().id());
 +    info->SetIndex(tab_index);
++    std::optional<tab_groups::TabGroupId> group =
++        bwi->GetTabStripModel()->GetTabGroupForTab(tab_index);
++    if (group.has_value()) {
++      info->SetGroupId(SerializeGroupId(group.value()));
++    }
 +  }
 +
 +  Profile* profile =
@@ -264,6 +278,158 @@ index 30bd52d09c3fc..e374fc071f8d2 100644
 +  return Response::Success();
 +}
 +
++std::optional<tab_groups::TabGroupId> DeserializeGroupId(
++    const std::string& s) {
++  auto token = base::Token::FromString(s);
++  if (!token) {
++    return std::nullopt;
++  }
++  return tab_groups::TabGroupId::FromRawToken(*token);
++}
++
++std::string TabGroupColorToString(tab_groups::TabGroupColorId color) {
++  switch (color) {
++    case tab_groups::TabGroupColorId::kGrey:
++      return "grey";
++    case tab_groups::TabGroupColorId::kBlue:
++      return "blue";
++    case tab_groups::TabGroupColorId::kRed:
++      return "red";
++    case tab_groups::TabGroupColorId::kYellow:
++      return "yellow";
++    case tab_groups::TabGroupColorId::kGreen:
++      return "green";
++    case tab_groups::TabGroupColorId::kPink:
++      return "pink";
++    case tab_groups::TabGroupColorId::kPurple:
++      return "purple";
++    case tab_groups::TabGroupColorId::kCyan:
++      return "cyan";
++    case tab_groups::TabGroupColorId::kOrange:
++      return "orange";
++    default:
++      return "grey";
++  }
++}
++
++std::optional<tab_groups::TabGroupColorId> ParseTabGroupColor(
++    const std::string& s) {
++  if (s == "grey") return tab_groups::TabGroupColorId::kGrey;
++  if (s == "blue") return tab_groups::TabGroupColorId::kBlue;
++  if (s == "red") return tab_groups::TabGroupColorId::kRed;
++  if (s == "yellow") return tab_groups::TabGroupColorId::kYellow;
++  if (s == "green") return tab_groups::TabGroupColorId::kGreen;
++  if (s == "pink") return tab_groups::TabGroupColorId::kPink;
++  if (s == "purple") return tab_groups::TabGroupColorId::kPurple;
++  if (s == "cyan") return tab_groups::TabGroupColorId::kCyan;
++  if (s == "orange") return tab_groups::TabGroupColorId::kOrange;
++  return std::nullopt;
++}
++
++std::unique_ptr<protocol::Browser::TabGroupInfo> BuildTabGroupInfo(
++    BrowserWindowInterface* bwi,
++    const tab_groups::TabGroupId& group_id) {
++  TabStripModel* strip = bwi->GetTabStripModel();
++  const tab_groups::TabGroupVisualData* visual =
++      strip->group_model()->GetTabGroup(group_id)->visual_data();
++
++  auto tab_ids = std::make_unique<protocol::Array<int>>();
++  for (int i = 0; i < strip->count(); ++i) {
++    if (strip->GetTabGroupForTab(i) == group_id) {
++      int tid = sessions::SessionTabHelper::IdForTab(
++                    strip->GetWebContentsAt(i))
++                    .id();
++      tab_ids->push_back(tid);
++    }
++  }
++
++  return protocol::Browser::TabGroupInfo::Create()
++      .SetGroupId(SerializeGroupId(group_id))
++      .SetWindowId(bwi->GetSessionID().id())
++      .SetTitle(base::UTF16ToUTF8(visual->title()))
++      .SetColor(TabGroupColorToString(visual->color()))
++      .SetCollapsed(visual->is_collapsed())
++      .SetTabIds(std::move(tab_ids))
++      .Build();
++}
++
++struct GroupLookupResult {
++  raw_ptr<BrowserWindowInterface> bwi = nullptr;
++  tab_groups::TabGroupId group_id = tab_groups::TabGroupId::CreateEmpty();
++};
++
++Response ResolveGroupId(const std::string& group_id_str,
++                        GroupLookupResult* result) {
++  auto gid = DeserializeGroupId(group_id_str);
++  if (!gid) {
++    return Response::InvalidParams("Invalid group ID format");
++  }
++
++  BrowserWindowInterface* found = nullptr;
++  ForEachCurrentBrowserWindowInterfaceOrderedByActivation(
++      [&gid, &found](BrowserWindowInterface* bwi) {
++        auto* gm = bwi->GetTabStripModel()->group_model();
++        if (gm && gm->ContainsTabGroup(*gid)) {
++          found = bwi;
++          return false;
++        }
++        return true;
++      });
++
++  if (!found) {
++    return Response::ServerError("Tab group not found");
++  }
++
++  result->bwi = found;
++  result->group_id = *gid;
++  return Response::Success();
++}
++
++Response ResolveTabIdsToIndices(const protocol::Array<int>& tab_ids,
++                                BrowserWindowInterface** out_bwi,
++                                std::vector<int>* out_indices) {
++  if (tab_ids.empty()) {
++    return Response::InvalidParams("tabIds must not be empty");
++  }
++
++  *out_bwi = nullptr;
++  out_indices->clear();
++
++  for (int tid : tab_ids) {
++    BrowserWindowInterface* found_bwi = nullptr;
++    int found_index = -1;
++
++    ForEachCurrentBrowserWindowInterfaceOrderedByActivation(
++        [tid, &found_bwi, &found_index](BrowserWindowInterface* bwi) {
++          TabStripModel* tab_strip = bwi->GetTabStripModel();
++          for (int i = 0; i < tab_strip->count(); ++i) {
++            content::WebContents* wc = tab_strip->GetWebContentsAt(i);
++            SessionID sid = sessions::SessionTabHelper::IdForTab(wc);
++            if (sid.is_valid() && sid.id() == tid) {
++              found_bwi = bwi;
++              found_index = i;
++              return false;
++            }
++          }
++          return true;
++        });
++
++    if (!found_bwi) {
++      return Response::ServerError("No tab with given id");
++    }
++
++    if (*out_bwi && *out_bwi != found_bwi) {
++      return Response::InvalidParams(
++          "All tabs must be in the same window");
++    }
++
++    *out_bwi = found_bwi;
++    out_indices->push_back(found_index);
++  }
++
++  return Response::Success();
++}
++
  }  // namespace
  
  BrowserHandler::BrowserHandler(protocol::UberDispatcher* dispatcher,
@@ -274,7 +440,7 @@ index 30bd52d09c3fc..e374fc071f8d2 100644
    // Dispatcher can be null in tests.
    if (dispatcher)
      protocol::Browser::Dispatcher::wire(dispatcher, this);
-@@ -120,6 +359,65 @@ Response BrowserHandler::GetWindowForTarget(
+@@ -120,6 +525,65 @@ Response BrowserHandler::GetWindowForTarget(
    return Response::Success();
  }
  
@@ -340,7 +506,7 @@ index 30bd52d09c3fc..e374fc071f8d2 100644
  Response BrowserHandler::GetWindowBounds(
      int window_id,
      std::unique_ptr<protocol::Browser::Bounds>* out_bounds) {
-@@ -297,3 +595,542 @@ protocol::Response BrowserHandler::AddPrivacySandboxEnrollmentOverride(
+@@ -297,3 +761,803 @@ protocol::Response BrowserHandler::AddPrivacySandboxEnrollmentOverride(
        net::SchemefulSite(url_to_add));
    return Response::Success();
  }
@@ -881,5 +1047,266 @@ index 30bd52d09c3fc..e374fc071f8d2 100644
 +  hidden_tab_manager_->TakeWebContents(std::move(detached));
 +
 +  *out_tab = BuildTabInfo(raw_wc, nullptr, -1, true);
++  return Response::Success();
++}
++
++// --- Tab Group Management ---
++
++Response BrowserHandler::GetTabGroups(
++    std::optional<int> window_id,
++    std::unique_ptr<protocol::Array<protocol::Browser::TabGroupInfo>>*
++        out_groups) {
++  auto groups =
++      std::make_unique<protocol::Array<protocol::Browser::TabGroupInfo>>();
++
++  if (window_id.has_value()) {
++    BrowserWindowInterface* bwi =
++        GetBrowserWindowInterface(window_id.value());
++    if (!bwi) {
++      return Response::ServerError("Browser window not found");
++    }
++    auto* gm = bwi->GetTabStripModel()->group_model();
++    if (gm) {
++      for (const auto& gid : gm->ListTabGroups()) {
++        groups->push_back(BuildTabGroupInfo(bwi, gid));
++      }
++    }
++  } else {
++    ForEachCurrentBrowserWindowInterfaceOrderedByActivation(
++        [&groups](BrowserWindowInterface* bwi) {
++          auto* gm = bwi->GetTabStripModel()->group_model();
++          if (gm) {
++            for (const auto& gid : gm->ListTabGroups()) {
++              groups->push_back(BuildTabGroupInfo(bwi, gid));
++            }
++          }
++          return true;
++        });
++  }
++
++  *out_groups = std::move(groups);
++  return Response::Success();
++}
++
++Response BrowserHandler::CreateTabGroup(
++    std::unique_ptr<protocol::Array<int>> tab_ids,
++    std::optional<std::string> title,
++    std::unique_ptr<protocol::Browser::TabGroupInfo>* out_group) {
++  if (!tab_ids || tab_ids->empty()) {
++    return Response::InvalidParams("tabIds must not be empty");
++  }
++
++  BrowserWindowInterface* bwi = nullptr;
++  std::vector<int> indices;
++  Response response = ResolveTabIdsToIndices(*tab_ids, &bwi, &indices);
++  if (!response.IsSuccess()) {
++    return response;
++  }
++
++  TabStripModel* strip = bwi->GetTabStripModel();
++  tab_groups::TabGroupId gid = strip->AddToNewGroup(indices);
++
++  if (title.has_value()) {
++    const tab_groups::TabGroupVisualData* current =
++        strip->group_model()->GetTabGroup(gid)->visual_data();
++    tab_groups::TabGroupVisualData new_data(
++        base::UTF8ToUTF16(title.value()), current->color(),
++        current->is_collapsed());
++    strip->ChangeTabGroupVisuals(gid, new_data);
++  }
++
++  *out_group = BuildTabGroupInfo(bwi, gid);
++  return Response::Success();
++}
++
++Response BrowserHandler::UpdateTabGroup(
++    const std::string& group_id,
++    std::optional<std::string> title,
++    std::optional<std::string> color,
++    std::optional<bool> collapsed,
++    std::unique_ptr<protocol::Browser::TabGroupInfo>* out_group) {
++  GroupLookupResult lookup;
++  Response response = ResolveGroupId(group_id, &lookup);
++  if (!response.IsSuccess()) {
++    return response;
++  }
++
++  TabStripModel* strip = lookup.bwi->GetTabStripModel();
++  const tab_groups::TabGroupVisualData* current =
++      strip->group_model()->GetTabGroup(lookup.group_id)->visual_data();
++
++  std::u16string new_title =
++      title.has_value() ? base::UTF8ToUTF16(title.value()) : current->title();
++  tab_groups::TabGroupColorId new_color = current->color();
++  if (color.has_value()) {
++    auto parsed = ParseTabGroupColor(color.value());
++    if (!parsed) {
++      return Response::InvalidParams("Unknown color");
++    }
++    new_color = *parsed;
++  }
++  bool new_collapsed =
++      collapsed.has_value() ? collapsed.value() : current->is_collapsed();
++
++  tab_groups::TabGroupVisualData new_data(new_title, new_color, new_collapsed);
++  strip->ChangeTabGroupVisuals(lookup.group_id, new_data);
++
++  *out_group = BuildTabGroupInfo(lookup.bwi, lookup.group_id);
++  return Response::Success();
++}
++
++Response BrowserHandler::CloseTabGroup(const std::string& group_id) {
++  GroupLookupResult lookup;
++  Response response = ResolveGroupId(group_id, &lookup);
++  if (!response.IsSuccess()) {
++    return response;
++  }
++
++  lookup.bwi->GetTabStripModel()->CloseAllTabsInGroup(lookup.group_id);
++  return Response::Success();
++}
++
++Response BrowserHandler::AddTabsToGroup(
++    const std::string& group_id,
++    std::unique_ptr<protocol::Array<int>> tab_ids,
++    std::unique_ptr<protocol::Browser::TabGroupInfo>* out_group) {
++  if (!tab_ids || tab_ids->empty()) {
++    return Response::InvalidParams("tabIds must not be empty");
++  }
++
++  GroupLookupResult lookup;
++  Response response = ResolveGroupId(group_id, &lookup);
++  if (!response.IsSuccess()) {
++    return response;
++  }
++
++  BrowserWindowInterface* bwi = nullptr;
++  std::vector<int> indices;
++  response = ResolveTabIdsToIndices(*tab_ids, &bwi, &indices);
++  if (!response.IsSuccess()) {
++    return response;
++  }
++
++  if (bwi != lookup.bwi) {
++    return Response::InvalidParams(
++        "Tabs must be in the same window as the group");
++  }
++
++  lookup.bwi->GetTabStripModel()->AddToExistingGroup(indices,
++                                                      lookup.group_id);
++
++  *out_group = BuildTabGroupInfo(lookup.bwi, lookup.group_id);
++  return Response::Success();
++}
++
++Response BrowserHandler::RemoveTabsFromGroup(
++    std::unique_ptr<protocol::Array<int>> tab_ids) {
++  if (!tab_ids || tab_ids->empty()) {
++    return Response::InvalidParams("tabIds must not be empty");
++  }
++
++  for (int tid : *tab_ids) {
++    BrowserWindowInterface* found_bwi = nullptr;
++    int found_index = -1;
++
++    ForEachCurrentBrowserWindowInterfaceOrderedByActivation(
++        [tid, &found_bwi, &found_index](BrowserWindowInterface* bwi) {
++          TabStripModel* tab_strip = bwi->GetTabStripModel();
++          for (int i = 0; i < tab_strip->count(); ++i) {
++            content::WebContents* wc = tab_strip->GetWebContentsAt(i);
++            SessionID sid = sessions::SessionTabHelper::IdForTab(wc);
++            if (sid.is_valid() && sid.id() == tid) {
++              found_bwi = bwi;
++              found_index = i;
++              return false;
++            }
++          }
++          return true;
++        });
++
++    if (!found_bwi) {
++      return Response::ServerError("No tab with given id");
++    }
++
++    TabStripModel* strip = found_bwi->GetTabStripModel();
++    if (strip->GetTabGroupForTab(found_index).has_value()) {
++      strip->RemoveFromGroup({found_index});
++    }
++  }
++
++  return Response::Success();
++}
++
++Response BrowserHandler::MoveTabGroup(
++    const std::string& group_id,
++    std::optional<int> window_id,
++    std::optional<int> index,
++    std::unique_ptr<protocol::Browser::TabGroupInfo>* out_group) {
++  GroupLookupResult lookup;
++  Response response = ResolveGroupId(group_id, &lookup);
++  if (!response.IsSuccess()) {
++    return response;
++  }
++
++  BrowserWindowInterface* target_bwi = lookup.bwi;
++  if (window_id.has_value()) {
++    target_bwi = GetBrowserWindowInterface(window_id.value());
++    if (!target_bwi) {
++      return Response::ServerError("Browser window not found");
++    }
++  }
++
++  if (target_bwi == lookup.bwi) {
++    // Same-window move.
++    if (index.has_value()) {
++      lookup.bwi->GetTabStripModel()->MoveGroupTo(lookup.group_id,
++                                                   index.value());
++    }
++    *out_group = BuildTabGroupInfo(lookup.bwi, lookup.group_id);
++    return Response::Success();
++  }
++
++  // Cross-window move: collect tabs, detach, re-insert, re-group.
++  TabStripModel* source_strip = lookup.bwi->GetTabStripModel();
++  const tab_groups::TabGroupVisualData* visual =
++      source_strip->group_model()->GetTabGroup(lookup.group_id)->visual_data();
++  tab_groups::TabGroupVisualData saved_visual = *visual;
++
++  // Collect WebContents in the group (reverse order for stable detach).
++  std::vector<content::WebContents*> group_tabs;
++  for (int i = source_strip->count() - 1; i >= 0; --i) {
++    if (source_strip->GetTabGroupForTab(i) == lookup.group_id) {
++      group_tabs.push_back(source_strip->GetWebContentsAt(i));
++    }
++  }
++  std::ranges::reverse(group_tabs);
++
++  // Detach in reverse index order.
++  std::vector<std::unique_ptr<content::WebContents>> detached;
++  for (int i = source_strip->count() - 1; i >= 0; --i) {
++    if (source_strip->GetTabGroupForTab(i) == lookup.group_id) {
++      detached.push_back(
++          source_strip->DetachWebContentsAtForInsertion(i));
++    }
++  }
++  std::ranges::reverse(detached);
++
++  // Insert into target window.
++  TabStripModel* target_strip = target_bwi->GetTabStripModel();
++  int insert_at = index.value_or(target_strip->count());
++  std::vector<int> new_indices;
++  for (auto& wc : detached) {
++    target_strip->InsertWebContentsAt(insert_at, std::move(wc),
++                                      AddTabTypes::ADD_NONE);
++    new_indices.push_back(insert_at);
++    insert_at++;
++  }
++
++  // Group the inserted tabs.
++  tab_groups::TabGroupId new_gid =
++      target_strip->AddToNewGroup(new_indices);
++  target_strip->ChangeTabGroupVisuals(new_gid, saved_visual);
++
++  *out_group = BuildTabGroupInfo(target_bwi, new_gid);
 +  return Response::Success();
 +}
