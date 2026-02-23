@@ -1,9 +1,9 @@
 diff --git a/chrome/browser/browseros/server/browseros_server_manager.cc b/chrome/browser/browseros/server/browseros_server_manager.cc
 new file mode 100644
-index 0000000000000..0070cd46351f6
+index 0000000000000..0d9d3f049581c
 --- /dev/null
 +++ b/chrome/browser/browseros/server/browseros_server_manager.cc
-@@ -0,0 +1,1066 @@
+@@ -0,0 +1,1072 @@
 +// Copyright 2024 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -52,6 +52,7 @@ index 0000000000000..0070cd46351f6
 +#include "components/version_info/version_info.h"
 +#include "content/public/browser/browser_thread.h"
 +#include "content/public/browser/devtools_agent_host.h"
++#include "content/public/common/content_switches.h"
 +#include "content/public/browser/devtools_socket_factory.h"
 +#include "net/base/address_family.h"
 +#include "net/base/ip_address.h"
@@ -425,6 +426,16 @@ index 0000000000000..0070cd46351f6
 +  SavePortsToPrefs();
 +
 +  base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
++
++  // Always start the CDP server unless --remote-debugging-port is set
++  // (Chromium's own handler would overwrite ours since they share a singleton).
++  if (!command_line->HasSwitch(::switches::kRemoteDebuggingPort)) {
++    StartCDPServer();
++  } else {
++    LOG(WARNING) << "browseros: Skipping BrowserOS CDP server — "
++              << "--remote-debugging-port takes precedence";
++  }
++
 +  if (command_line->HasSwitch(browseros::kDisableServer)) {
 +    LOG(INFO) << "browseros: BrowserOS server disabled via command line";
 +    return;
@@ -442,7 +453,6 @@ index 0000000000000..0070cd46351f6
 +
 +  LOG(INFO) << "browseros: Starting BrowserOS server";
 +
-+  StartCDPServer();
 +  StartProxy();
 +  LaunchBrowserOSProcess();
 +}
@@ -489,10 +499,6 @@ index 0000000000000..0070cd46351f6
 +
 +void BrowserOSServerManager::StartCDPServer() {
 +  LOG(INFO) << "browseros: Starting CDP server on port " << ports_.cdp;
-+
-+  // Stop any existing DevTools server (e.g. from --remote-debugging-port or
-+  // the approval-mode feature) so our handler isn't racing with it.
-+  content::DevToolsAgentHost::StopRemoteDebuggingServer();
 +
 +  content::DevToolsAgentHost::StartRemoteDebuggingServer(
 +      std::make_unique<CDPServerSocketFactory>(ports_.cdp),
