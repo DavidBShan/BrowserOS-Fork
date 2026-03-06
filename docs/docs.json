@@ -29,8 +29,19 @@
           "features/cowork",
           "features/connect-mcps",
           "features/use-with-claude-code",
+          "features/soul",
+          "features/memory",
+          "features/sync-to-cloud",
           "features/llm-chat-hub",
           "features/ad-blocking"
+        ]
+      },
+      {
+        "group": "Comparisons",
+        "pages": [
+          "comparisons/chrome-devtools-mcp",
+          "comparisons/claude-cowork",
+          "comparisons/openclaw"
         ]
       },
       {
@@ -53,6 +64,10 @@
   },
   "navbar": {
     "links": [
+      {
+        "label": "llms.txt",
+        "href": "/llms.txt"
+      },
       {
         "label": "Support",
         "href": "https://discord.gg/YKwjt5vuKr"
