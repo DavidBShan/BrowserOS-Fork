@@ -1,9 +1,9 @@
 import {
   ArrowLeft,
+  BookOpen,
   Bot,
   Compass,
   GitBranch,
-  Info,
   MessageSquare,
   Palette,
   RotateCcw,
@@ -90,7 +90,7 @@ const primarySettingsSections: NavSection[] = [
 ]
 
 const helpItems: NavItem[] = [
-  { name: 'Docs', href: 'https://docs.browseros.com/', icon: Info },
+  { name: 'Docs', href: 'https://docs.browseros.com/', icon: BookOpen },
   { name: 'Features', to: '/onboarding/features', icon: Compass },
   { name: 'Revisit Onboarding', to: '/onboarding', icon: RotateCcw },
 ]
