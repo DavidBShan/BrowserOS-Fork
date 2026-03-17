@@ -3,7 +3,8 @@
 // Matches DEV_PORTS.cdp from @browseros/shared/constants/ports
 const DEFAULT_CDP_PORT = 9010
 const REQUEST_TIMEOUT_MS = 30_000
-const EXTENSION_ID = process.env.BROWSEROS_EXTENSION_ID || 'bflpfmnmnokmjhmgnolecpppdbdophmk'
+const EXTENSION_ID =
+  process.env.BROWSEROS_EXTENSION_ID || 'bflpfmnmnokmjhmgnolecpppdbdophmk'
 
 // ─── CDP WebSocket Client ────────────────────────────────────────────
 
@@ -91,7 +92,11 @@ class CDPClient {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(id)
-        reject(new Error(`CDP request timed out after ${REQUEST_TIMEOUT_MS}ms: ${method}`))
+        reject(
+          new Error(
+            `CDP request timed out after ${REQUEST_TIMEOUT_MS}ms: ${method}`,
+          ),
+        )
       }, REQUEST_TIMEOUT_MS)
       this.pending.set(id, { resolve, reject, timer })
       const msg: Record<string, unknown> = { id, method, params }
@@ -125,7 +130,9 @@ function resolveTarget(targets: TargetInfo[], query: string): TargetInfo {
     return targets[idx]
   }
   const q = query.toLowerCase()
-  const match = targets.find((t) => t.url.toLowerCase().includes(q) || t.title.toLowerCase().includes(q))
+  const match = targets.find(
+    (t) => t.url.toLowerCase().includes(q) || t.title.toLowerCase().includes(q),
+  )
   if (!match) throw new Error(`No target matching "${query}"`)
   return match
 }
@@ -155,10 +162,7 @@ async function enableDomains(
   }
 }
 
-async function detachSession(
-  cdp: CDPClient,
-  sessionId: string,
-): Promise<void> {
+async function detachSession(cdp: CDPClient, sessionId: string): Promise<void> {
   try {
     await cdp.send('Target.detachFromTarget', { sessionId })
   } catch {
@@ -169,12 +173,32 @@ async function detachSession(
 // ─── Snapshot: AX tree ───────────────────────────────────────────────
 
 const INTERACTIVE_ROLES = new Set([
-  'button', 'link', 'textbox', 'searchbox', 'textarea', 'checkbox', 'radio',
-  'combobox', 'menuitem', 'menuitemcheckbox', 'menuitemradio', 'tab', 'switch',
-  'slider', 'spinbutton', 'option', 'treeitem', 'listbox',
+  'button',
+  'link',
+  'textbox',
+  'searchbox',
+  'textarea',
+  'checkbox',
+  'radio',
+  'combobox',
+  'menuitem',
+  'menuitemcheckbox',
+  'menuitemradio',
+  'tab',
+  'switch',
+  'slider',
+  'spinbutton',
+  'option',
+  'treeitem',
+  'listbox',
 ])
 
-const SKIP_ROLES = new Set(['none', 'presentation', 'LineBreak', 'InlineTextBox'])
+const SKIP_ROLES = new Set([
+  'none',
+  'presentation',
+  'LineBreak',
+  'InlineTextBox',
+])
 
 type AXValue = { type: string; value?: string | number | boolean }
 type AXProperty = { name: string; value: AXValue }
@@ -199,7 +223,9 @@ function buildInteractiveTree(nodes: AXNode[]): string[] {
     const node = nodeMap.get(nodeId)
     if (!node) return
 
-    const role = node.ignored ? undefined : (node.role?.value as string | undefined)
+    const role = node.ignored
+      ? undefined
+      : (node.role?.value as string | undefined)
     if (!role || SKIP_ROLES.has(role)) {
       if (node.childIds) for (const childId of node.childIds) walk(childId)
       return
@@ -207,11 +233,15 @@ function buildInteractiveTree(nodes: AXNode[]): string[] {
 
     if (INTERACTIVE_ROLES.has(role) && node.backendDOMNodeId !== undefined) {
       const name = typeof node.name?.value === 'string' ? node.name.value : ''
-      const value = typeof node.value?.value === 'string' ? node.value.value : ''
+      const value =
+        typeof node.value?.value === 'string' ? node.value.value : ''
 
       let line = `[${node.backendDOMNodeId}] ${role}`
       if (name) line += ` "${name}"`
-      if (value && (role === 'textbox' || role === 'searchbox' || role === 'textarea'))
+      if (
+        value &&
+        (role === 'textbox' || role === 'searchbox' || role === 'textarea')
+      )
         line += ` value="${value}"`
       const props = extractProps(node)
       if (props) line += ` ${props}`
@@ -222,8 +252,9 @@ function buildInteractiveTree(nodes: AXNode[]): string[] {
   }
 
   const root =
-    nodes.find((n) => n.role?.value === 'RootWebArea' || n.role?.value === 'WebArea') ??
-    nodes[0]
+    nodes.find(
+      (n) => n.role?.value === 'RootWebArea' || n.role?.value === 'WebArea',
+    ) ?? nodes[0]
   if (root?.childIds) for (const childId of root.childIds) walk(childId)
 
   return lines
@@ -233,13 +264,20 @@ function extractProps(node: AXNode): string {
   const parts: string[] = []
   if (!node.properties) return ''
   for (const prop of node.properties) {
-    if (prop.name === 'checked' && prop.value.value === true) parts.push('checked')
-    if (prop.name === 'checked' && prop.value.value === 'mixed') parts.push('indeterminate')
-    if (prop.name === 'disabled' && prop.value.value === true) parts.push('disabled')
-    if (prop.name === 'expanded' && prop.value.value === true) parts.push('expanded')
-    if (prop.name === 'expanded' && prop.value.value === false) parts.push('collapsed')
-    if (prop.name === 'required' && prop.value.value === true) parts.push('required')
-    if (prop.name === 'selected' && prop.value.value === true) parts.push('selected')
+    if (prop.name === 'checked' && prop.value.value === true)
+      parts.push('checked')
+    if (prop.name === 'checked' && prop.value.value === 'mixed')
+      parts.push('indeterminate')
+    if (prop.name === 'disabled' && prop.value.value === true)
+      parts.push('disabled')
+    if (prop.name === 'expanded' && prop.value.value === true)
+      parts.push('expanded')
+    if (prop.name === 'expanded' && prop.value.value === false)
+      parts.push('collapsed')
+    if (prop.name === 'required' && prop.value.value === true)
+      parts.push('required')
+    if (prop.name === 'selected' && prop.value.value === true)
+      parts.push('selected')
     if (prop.name === 'level') parts.push(`level=${prop.value.value}`)
   }
   return parts.length > 0 ? `(${parts.join(', ')})` : ''
@@ -297,7 +335,9 @@ async function getElementCenter(
   const obj = resolved.object as { objectId?: string } | undefined
   const objectId = obj?.objectId
   if (!objectId)
-    throw new Error('Could not resolve element - it may have been removed from the page.')
+    throw new Error(
+      'Could not resolve element - it may have been removed from the page.',
+    )
 
   const boundsResult = await cdp.send(
     'Runtime.callFunctionOn',
@@ -310,7 +350,9 @@ async function getElementCenter(
     sessionId,
   )
 
-  const result = boundsResult.result as { value?: { x: number; y: number; w: number; h: number } } | undefined
+  const result = boundsResult.result as
+    | { value?: { x: number; y: number; w: number; h: number } }
+    | undefined
   const rect = result?.value
   if (!rect) throw new Error('Could not get element bounds.')
   return { x: rect.x + rect.w / 2, y: rect.y + rect.h / 2 }
@@ -343,7 +385,11 @@ async function cmdScreenshot(
   const sessionId = await attachSession(cdp, target.targetId)
   try {
     await enableDomains(cdp, sessionId, ['Page'])
-    const result = await cdp.send('Page.captureScreenshot', { format: 'png' }, sessionId)
+    const result = await cdp.send(
+      'Page.captureScreenshot',
+      { format: 'png' },
+      sessionId,
+    )
     const data = result.data as string
     if (!data) throw new Error('No screenshot data returned')
     const buf = Buffer.from(data, 'base64')
@@ -391,7 +437,11 @@ async function cmdClick(
 
     // Scroll into view first
     try {
-      await cdp.send('DOM.scrollIntoViewIfNeeded', { backendNodeId: elementId }, sessionId)
+      await cdp.send(
+        'DOM.scrollIntoViewIfNeeded',
+        { backendNodeId: elementId },
+        sessionId,
+      )
     } catch {
       // not critical
     }
@@ -399,7 +449,11 @@ async function cmdClick(
     let clicked = false
     try {
       const { x, y } = await getElementCenter(cdp, sessionId, elementId)
-      await cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y }, sessionId)
+      await cdp.send(
+        'Input.dispatchMouseEvent',
+        { type: 'mouseMoved', x, y },
+        sessionId,
+      )
       await cdp.send(
         'Input.dispatchMouseEvent',
         { type: 'mousePressed', x, y, button: 'left', clickCount: 1 },
@@ -411,9 +465,13 @@ async function cmdClick(
         sessionId,
       )
       clicked = true
-      console.log(`Clicked element ${elementId} at (${Math.round(x)}, ${Math.round(y)})`)
+      console.log(
+        `Clicked element ${elementId} at (${Math.round(x)}, ${Math.round(y)})`,
+      )
     } catch (err) {
-      console.log(`Coordinate click failed (${(err as Error).message}), falling back to JS click`)
+      console.log(
+        `Coordinate click failed (${(err as Error).message}), falling back to JS click`,
+      )
     }
 
     if (!clicked) {
@@ -424,7 +482,8 @@ async function cmdClick(
       )
       const obj = resolved.object as { objectId?: string } | undefined
       const objectId = obj?.objectId
-      if (!objectId) throw new Error('Element not found in DOM. Take a new snapshot.')
+      if (!objectId)
+        throw new Error('Element not found in DOM. Take a new snapshot.')
       await cdp.send(
         'Runtime.callFunctionOn',
         { functionDeclaration: 'function(){this.click()}', objectId },
@@ -452,7 +511,11 @@ async function cmdFill(
 
     // Scroll into view
     try {
-      await cdp.send('DOM.scrollIntoViewIfNeeded', { backendNodeId: elementId }, sessionId)
+      await cdp.send(
+        'DOM.scrollIntoViewIfNeeded',
+        { backendNodeId: elementId },
+        sessionId,
+      )
     } catch {
       // not critical
     }
@@ -470,22 +533,44 @@ async function cmdFill(
     // Clear: Ctrl+A (select all) then Delete
     await cdp.send(
       'Input.dispatchKeyEvent',
-      { type: 'keyDown', key: 'a', code: 'KeyA', modifiers: 2, windowsVirtualKeyCode: 65 },
+      {
+        type: 'keyDown',
+        key: 'a',
+        code: 'KeyA',
+        modifiers: 2,
+        windowsVirtualKeyCode: 65,
+      },
       sessionId,
     )
     await cdp.send(
       'Input.dispatchKeyEvent',
-      { type: 'keyUp', key: 'a', code: 'KeyA', modifiers: 2, windowsVirtualKeyCode: 65 },
+      {
+        type: 'keyUp',
+        key: 'a',
+        code: 'KeyA',
+        modifiers: 2,
+        windowsVirtualKeyCode: 65,
+      },
       sessionId,
     )
     await cdp.send(
       'Input.dispatchKeyEvent',
-      { type: 'keyDown', key: 'Delete', code: 'Delete', windowsVirtualKeyCode: 46 },
+      {
+        type: 'keyDown',
+        key: 'Delete',
+        code: 'Delete',
+        windowsVirtualKeyCode: 46,
+      },
       sessionId,
     )
     await cdp.send(
       'Input.dispatchKeyEvent',
-      { type: 'keyUp', key: 'Delete', code: 'Delete', windowsVirtualKeyCode: 46 },
+      {
+        type: 'keyUp',
+        key: 'Delete',
+        code: 'Delete',
+        windowsVirtualKeyCode: 46,
+      },
       sessionId,
     )
 
@@ -513,17 +598,23 @@ async function cmdEval(
       { expression, awaitPromise: true, returnByValue: true },
       sessionId,
     )
-    const evalResult = result.result as {
-      type?: string
-      value?: unknown
-      description?: string
-      subtype?: string
-    } | undefined
-    const exnDetails = result.exceptionDetails as {
-      exception?: { description?: string }
-    } | undefined
+    const evalResult = result.result as
+      | {
+          type?: string
+          value?: unknown
+          description?: string
+          subtype?: string
+        }
+      | undefined
+    const exnDetails = result.exceptionDetails as
+      | {
+          exception?: { description?: string }
+        }
+      | undefined
     if (exnDetails) {
-      throw new Error(`JS exception: ${exnDetails.exception?.description ?? 'unknown error'}`)
+      throw new Error(
+        `JS exception: ${exnDetails.exception?.description ?? 'unknown error'}`,
+      )
     }
     if (evalResult?.type === 'undefined') {
       console.log('undefined')
@@ -562,17 +653,35 @@ const KEY_MAP: Record<string, { code: string; keyCode: number | undefined }> = {
 }
 
 const KEY_ALIASES: Record<string, string> = {
-  Return: 'Enter', Esc: 'Escape', Del: 'Delete',
-  Ctrl: 'Control', Cmd: 'Meta', Command: 'Meta', Option: 'Alt',
-  Left: 'ArrowLeft', Right: 'ArrowRight', Up: 'ArrowUp', Down: 'ArrowDown',
+  Return: 'Enter',
+  Esc: 'Escape',
+  Del: 'Delete',
+  Ctrl: 'Control',
+  Cmd: 'Meta',
+  Command: 'Meta',
+  Option: 'Alt',
+  Left: 'ArrowLeft',
+  Right: 'ArrowRight',
+  Up: 'ArrowUp',
+  Down: 'ArrowDown',
 }
 
-const KEY_TEXT: Record<string, string> = { Enter: '\r', Tab: '\t', Space: ' ', ' ': ' ' }
-const MODIFIER_BIT: Record<string, number> = { Alt: 1, Control: 2, Meta: 4, Shift: 8 }
+const KEY_TEXT: Record<string, string> = {
+  Enter: '\r',
+  Tab: '\t',
+  Space: ' ',
+  ' ': ' ',
+}
+const MODIFIER_BIT: Record<string, number> = {
+  Alt: 1,
+  Control: 2,
+  Meta: 4,
+  Shift: 8,
+}
 
 function normalizeKey(key: string): string {
   if (KEY_MAP[key]) return key
-  for (const [k, v] of Object.entries(KEY_MAP)) {
+  for (const [k, _v] of Object.entries(KEY_MAP)) {
     if (k.toLowerCase() === key.toLowerCase()) return k
   }
   for (const [alias, canonical] of Object.entries(KEY_ALIASES)) {
@@ -581,12 +690,21 @@ function normalizeKey(key: string): string {
   return key
 }
 
-function getKeyInfo(key: string): { code: string; keyCode: number | undefined } {
+function getKeyInfo(key: string): {
+  code: string
+  keyCode: number | undefined
+} {
   if (KEY_MAP[key]) return KEY_MAP[key]
   if (key.length === 1) {
-    if (key >= 'a' && key <= 'z') return { code: `Key${key.toUpperCase()}`, keyCode: key.toUpperCase().charCodeAt(0) }
-    if (key >= 'A' && key <= 'Z') return { code: `Key${key}`, keyCode: key.charCodeAt(0) }
-    if (key >= '0' && key <= '9') return { code: `Digit${key}`, keyCode: key.charCodeAt(0) }
+    if (key >= 'a' && key <= 'z')
+      return {
+        code: `Key${key.toUpperCase()}`,
+        keyCode: key.toUpperCase().charCodeAt(0),
+      }
+    if (key >= 'A' && key <= 'Z')
+      return { code: `Key${key}`, keyCode: key.charCodeAt(0) }
+    if (key >= '0' && key <= '9')
+      return { code: `Digit${key}`, keyCode: key.charCodeAt(0) }
   }
   return { code: key, keyCode: undefined }
 }
@@ -604,8 +722,10 @@ async function cmdPressKey(
     const parts: string[] = []
     let current = ''
     for (const ch of keyCombo) {
-      if (ch === '+' && current) { parts.push(current); current = '' }
-      else current += ch
+      if (ch === '+' && current) {
+        parts.push(current)
+        current = ''
+      } else current += ch
     }
     if (current) parts.push(current)
 
@@ -617,32 +737,63 @@ async function cmdPressKey(
     // Press modifier keys down
     for (const mod of modifiers) {
       const info = getKeyInfo(mod)
-      await cdp.send('Input.dispatchKeyEvent', {
-        type: 'keyDown', key: mod, code: info.code, windowsVirtualKeyCode: info.keyCode,
-      }, sessionId)
+      await cdp.send(
+        'Input.dispatchKeyEvent',
+        {
+          type: 'keyDown',
+          key: mod,
+          code: info.code,
+          windowsVirtualKeyCode: info.keyCode,
+        },
+        sessionId,
+      )
     }
 
     const mainInfo = getKeyInfo(mainKey)
-    const suppressChar = modifiers.some(m => m === 'Control' || m === 'Alt' || m === 'Meta')
-    const text = suppressChar ? '' : (KEY_TEXT[mainKey] ?? (mainKey.length === 1 ? mainKey : ''))
+    const suppressChar = modifiers.some(
+      (m) => m === 'Control' || m === 'Alt' || m === 'Meta',
+    )
+    const text = suppressChar
+      ? ''
+      : (KEY_TEXT[mainKey] ?? (mainKey.length === 1 ? mainKey : ''))
 
-    await cdp.send('Input.dispatchKeyEvent', {
-      type: 'keyDown', key: mainKey, code: mainInfo.code,
-      modifiers: modBitmask, windowsVirtualKeyCode: mainInfo.keyCode,
-      ...(text && { text }),
-    }, sessionId)
+    await cdp.send(
+      'Input.dispatchKeyEvent',
+      {
+        type: 'keyDown',
+        key: mainKey,
+        code: mainInfo.code,
+        modifiers: modBitmask,
+        windowsVirtualKeyCode: mainInfo.keyCode,
+        ...(text && { text }),
+      },
+      sessionId,
+    )
 
-    await cdp.send('Input.dispatchKeyEvent', {
-      type: 'keyUp', key: mainKey, code: mainInfo.code,
-      modifiers: modBitmask, windowsVirtualKeyCode: mainInfo.keyCode,
-    }, sessionId)
+    await cdp.send(
+      'Input.dispatchKeyEvent',
+      {
+        type: 'keyUp',
+        key: mainKey,
+        code: mainInfo.code,
+        modifiers: modBitmask,
+        windowsVirtualKeyCode: mainInfo.keyCode,
+      },
+      sessionId,
+    )
 
     // Release modifier keys
     for (const mod of modifiers.reverse()) {
       const info = getKeyInfo(mod)
-      await cdp.send('Input.dispatchKeyEvent', {
-        type: 'keyUp', key: mod, code: info.code,
-      }, sessionId)
+      await cdp.send(
+        'Input.dispatchKeyEvent',
+        {
+          type: 'keyUp',
+          key: mod,
+          code: info.code,
+        },
+        sessionId,
+      )
     }
 
     console.log(`Pressed ${keyCombo}`)
@@ -666,8 +817,10 @@ async function cmdScroll(
     await enableDomains(cdp, sessionId, ['Page'])
 
     const pixels = amount * 120
-    const deltaX = direction === 'left' ? -pixels : direction === 'right' ? pixels : 0
-    const deltaY = direction === 'up' ? -pixels : direction === 'down' ? pixels : 0
+    const deltaX =
+      direction === 'left' ? -pixels : direction === 'right' ? pixels : 0
+    const deltaY =
+      direction === 'up' ? -pixels : direction === 'down' ? pixels : 0
 
     if (deltaX === 0 && deltaY === 0) {
       console.error('Direction must be: up, down, left, or right')
@@ -676,13 +829,24 @@ async function cmdScroll(
 
     // Get viewport center for scroll position
     const metrics = await cdp.send('Page.getLayoutMetrics', {}, sessionId)
-    const viewport = metrics.layoutViewport as { clientWidth: number; clientHeight: number }
+    const viewport = metrics.layoutViewport as {
+      clientWidth: number
+      clientHeight: number
+    }
     const x = viewport.clientWidth / 2
     const y = viewport.clientHeight / 2
 
-    await cdp.send('Input.dispatchMouseEvent', {
-      type: 'mouseWheel', x, y, deltaX, deltaY,
-    }, sessionId)
+    await cdp.send(
+      'Input.dispatchMouseEvent',
+      {
+        type: 'mouseWheel',
+        x,
+        y,
+        deltaX,
+        deltaY,
+      },
+      sessionId,
+    )
 
     console.log(`Scrolled ${direction} by ${amount}`)
   } finally {
@@ -715,19 +879,26 @@ async function cmdWaitFor(
         expression = `!!document.querySelector(${JSON.stringify(waitValue)})`
       }
 
-      const result = await cdp.send('Runtime.evaluate', {
-        expression, returnByValue: true,
-      }, sessionId)
+      const result = await cdp.send(
+        'Runtime.evaluate',
+        {
+          expression,
+          returnByValue: true,
+        },
+        sessionId,
+      )
 
       const evalResult = result.result as { value?: unknown } | undefined
       if (evalResult?.value === true) {
         console.log(`Found ${waitType} "${waitValue}"`)
         return
       }
-      await new Promise(r => setTimeout(r, interval))
+      await new Promise((r) => setTimeout(r, interval))
     }
 
-    console.error(`Timeout: ${waitType} "${waitValue}" not found after ${timeoutMs}ms`)
+    console.error(
+      `Timeout: ${waitType} "${waitValue}" not found after ${timeoutMs}ms`,
+    )
     process.exitCode = 1
     return
   } finally {
@@ -750,14 +921,28 @@ async function cmdHover(
     await cdp.send('DOM.getDocument', { depth: 0 }, sessionId)
 
     try {
-      await cdp.send('DOM.scrollIntoViewIfNeeded', { backendNodeId: elementId }, sessionId)
-    } catch { /* not critical */ }
+      await cdp.send(
+        'DOM.scrollIntoViewIfNeeded',
+        { backendNodeId: elementId },
+        sessionId,
+      )
+    } catch {
+      /* not critical */
+    }
 
     const { x, y } = await getElementCenter(cdp, sessionId, elementId)
-    await cdp.send('Input.dispatchMouseEvent', {
-      type: 'mouseMoved', x, y,
-    }, sessionId)
-    console.log(`Hovered over element ${elementId} at (${Math.round(x)}, ${Math.round(y)})`)
+    await cdp.send(
+      'Input.dispatchMouseEvent',
+      {
+        type: 'mouseMoved',
+        x,
+        y,
+      },
+      sessionId,
+    )
+    console.log(
+      `Hovered over element ${elementId} at (${Math.round(x)}, ${Math.round(y)})`,
+    )
   } finally {
     await detachSession(cdp, sessionId)
   }
@@ -778,13 +963,19 @@ async function cmdSelectOption(
     await enableDomains(cdp, sessionId, ['DOM', 'Runtime'])
     await cdp.send('DOM.getDocument', { depth: 0 }, sessionId)
 
-    const resolved = await cdp.send('DOM.resolveNode', { backendNodeId: elementId }, sessionId)
+    const resolved = await cdp.send(
+      'DOM.resolveNode',
+      { backendNodeId: elementId },
+      sessionId,
+    )
     const objectId = (resolved.object as { objectId?: string })?.objectId
     if (!objectId) throw new Error('Could not resolve element')
 
-    const result = await cdp.send('Runtime.callFunctionOn', {
-      objectId,
-      functionDeclaration: `function(val){
+    const result = await cdp.send(
+      'Runtime.callFunctionOn',
+      {
+        objectId,
+        functionDeclaration: `function(val){
         for(var i=0;i<this.options.length;i++){
           if(this.options[i].value===val||this.options[i].textContent.trim()===val){
             this.selectedIndex=i;
@@ -794,13 +985,17 @@ async function cmdSelectOption(
         }
         return null;
       }`,
-      arguments: [{ value }],
-      returnByValue: true,
-    }, sessionId)
+        arguments: [{ value }],
+        returnByValue: true,
+      },
+      sessionId,
+    )
 
     const selected = (result.result as { value?: unknown })?.value
     if (selected === null) {
-      throw new Error(`Option "${value}" not found in select element ${elementId}`)
+      throw new Error(
+        `Option "${value}" not found in select element ${elementId}`,
+      )
     }
     console.log(`Selected "${selected}" in element ${elementId}`)
   } finally {
@@ -811,9 +1006,7 @@ async function cmdSelectOption(
 async function cmdOpenSidepanel(cdp: CDPClient): Promise<void> {
   const targets = await getTargets(cdp)
   const sw = targets.find(
-    (t) =>
-      t.type === 'service_worker' &&
-      t.url.includes(EXTENSION_ID),
+    (t) => t.type === 'service_worker' && t.url.includes(EXTENSION_ID),
   )
   if (!sw) {
     throw new Error(
@@ -841,9 +1034,11 @@ async function cmdOpenSidepanel(cdp: CDPClient): Promise<void> {
       },
       sessionId,
     )
-    const exnDetails = result.exceptionDetails as {
-      exception?: { description?: string }
-    } | undefined
+    const exnDetails = result.exceptionDetails as
+      | {
+          exception?: { description?: string }
+        }
+      | undefined
     if (exnDetails) {
       throw new Error(
         `sidePanel.open() failed: ${exnDetails.exception?.description ?? 'unknown error'}`,
@@ -1021,7 +1216,12 @@ async function main(): Promise<void> {
         const target = args[1]
         const waitType = args[2]
         const waitValue = args.slice(3).join(' ')
-        if (!target || !waitType || !waitValue || !['text', 'selector'].includes(waitType)) {
+        if (
+          !target ||
+          !waitType ||
+          !waitValue ||
+          !['text', 'selector'].includes(waitType)
+        ) {
           console.error('Usage: wait_for <target> text|selector <value>')
           process.exit(1)
         }
