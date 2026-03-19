@@ -191,6 +191,10 @@ export const NewProviderDialog: FC<NewProviderDialogProps> = ({
   const kimiLaunch = useKimiLaunch()
 
   const filteredProviderTypeOptions = providerTypeOptions.filter((opt) => {
+    if (opt.value === 'chatgpt-pro')
+      return supports(Feature.CHATGPT_PRO_SUPPORT)
+    if (opt.value === 'github-copilot')
+      return supports(Feature.GITHUB_COPILOT_SUPPORT)
     if (opt.value === 'moonshot')
       return kimiLaunch || initialValues?.type === 'moonshot'
     if (opt.value === 'openai-compatible') {
