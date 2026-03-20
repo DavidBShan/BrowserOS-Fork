@@ -8,7 +8,7 @@
  * VS Code's algorithm (max 2048px longest side, 768px shortest side).
  */
 
-import sharp from 'sharp'
+import { Jimp } from 'jimp'
 import { logger } from '../../logger'
 
 const MAX_LONG_SIDE = 2048
@@ -81,11 +81,13 @@ async function resizeDataUrl(dataUrl: string): Promise<string | null> {
   const base64Data = dataUrl.substring(commaIdx + 1)
   const buffer = Buffer.from(base64Data, 'base64')
 
-  const image = sharp(buffer)
-  const metadata = await image.metadata()
-  if (!metadata.width || !metadata.height) return null
+  const image = await Jimp.fromBuffer(buffer)
+  const origWidth = image.width
+  const origHeight = image.height
+  if (!origWidth || !origHeight) return null
 
-  let { width, height } = metadata
+  let width = origWidth
+  let height = origHeight
 
   // Skip if already within both limits (no resize step will fire)
   if (
@@ -110,24 +112,20 @@ async function resizeDataUrl(dataUrl: string): Promise<string | null> {
     height = Math.round(height * scale)
   }
 
-  // Preserve PNG for images with alpha, use JPEG otherwise
-  const hasAlpha = metadata.channels === 4 || metadata.hasAlpha
-  const resizedBuffer = hasAlpha
-    ? await sharp(buffer)
-        .resize(width, height, { fit: 'inside' })
-        .png()
-        .toBuffer()
-    : await sharp(buffer)
-        .resize(width, height, { fit: 'inside' })
-        .jpeg({ quality: 75 })
-        .toBuffer()
+  image.resize({ w: width, h: height })
 
+  // Jimp always outputs with alpha; use PNG for alpha sources, JPEG otherwise
+  const hasAlpha = image.hasAlpha()
   const mime = hasAlpha ? 'image/png' : 'image/jpeg'
+  const resizedBuffer = hasAlpha
+    ? await image.getBuffer('image/png')
+    : await image.getBuffer('image/jpeg', { quality: 75 })
+
   const originalKB = Math.round(base64Data.length / 1024)
   const resizedB64 = resizedBuffer.toString('base64')
   const resizedKB = Math.round(resizedB64.length / 1024)
   logger.debug('Resized image for Copilot', {
-    original: `${metadata.width}x${metadata.height} (${originalKB}KB)`,
+    original: `${origWidth}x${origHeight} (${originalKB}KB)`,
     resized: `${width}x${height} (${resizedKB}KB)`,
   })
 

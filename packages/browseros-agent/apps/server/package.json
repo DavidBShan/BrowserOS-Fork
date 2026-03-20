@@ -89,11 +89,11 @@
     "fuse.js": "^7.1.0",
     "gray-matter": "^4.0.3",
     "hono": "^4.12.3",
+    "jimp": "^1.6.0",
     "klavis": "^2.15.0",
     "pino": "^9.6.0",
     "posthog-node": "^4.17.0",
     "puppeteer-core": "24.23.0",
-    "sharp": "^0.34.5",
     "ws": "^8.18.0",
     "zod": "^3.24.2",
     "zod-from-json-schema": "^0.1.0"
