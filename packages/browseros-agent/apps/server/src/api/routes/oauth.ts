@@ -50,11 +50,19 @@ export function createOAuthRoutes(deps: OAuthRouteDeps) {
           provider: providerId,
           error: error instanceof Error ? error.message : String(error),
         })
+
         const message =
           error instanceof Error
             ? error.message
-            : 'Failed to start authentication. Please try again.'
-        return c.json({ error: message }, 500)
+            : 'Failed to start authentication.'
+
+        // Port conflict — clear actionable message
+        const status =
+          error instanceof Error && error.message.includes('callback port')
+            ? 503
+            : 500
+
+        return c.json({ error: message }, status)
       }
     })
 

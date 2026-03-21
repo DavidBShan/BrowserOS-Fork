@@ -80,7 +80,7 @@ export async function createHttpServer(config: HttpServerConfig) {
 
   const { onShutdown } = config
 
-  // Initialize OAuth token manager + callback server (port released on process exit)
+  // Initialize OAuth token manager (callback server binds lazily on first PKCE login)
   const tokenManager = browserosId
     ? initializeOAuth(getDb(), browserosId)
     : null
@@ -110,6 +110,7 @@ export async function createHttpServer(config: HttpServerConfig) {
       '/shutdown',
       createShutdownRoute({
         onShutdown: () => {
+          tokenManager?.stopCallbackServer()
           klavisProxy?.close().catch((err) =>
             logger.warn('Failed to close Klavis proxy transport', {
               error: err instanceof Error ? err.message : String(err),

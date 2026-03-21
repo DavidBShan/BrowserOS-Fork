@@ -5,7 +5,7 @@
  */
 
 import type { Database } from 'bun:sqlite'
-import { startOAuthCallbackServer } from './callback-server'
+import { OAuthCallbackServer } from './callback-server'
 import { OAuthTokenManager } from './token-manager'
 import { OAuthTokenStore } from './token-store'
 
@@ -16,8 +16,9 @@ export function initializeOAuth(
   browserosId: string,
 ): OAuthTokenManager {
   const store = new OAuthTokenStore(db)
-  tokenManager = new OAuthTokenManager(store, browserosId)
-  startOAuthCallbackServer(tokenManager)
+  const callbackServer = new OAuthCallbackServer()
+  tokenManager = new OAuthTokenManager(store, browserosId, callbackServer)
+  callbackServer.setTokenManager(tokenManager)
   return tokenManager
 }
 

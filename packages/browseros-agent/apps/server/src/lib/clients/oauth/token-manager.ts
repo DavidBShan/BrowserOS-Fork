@@ -7,6 +7,7 @@
 import { OAUTH_CALLBACK_PORT } from '@browseros/shared/constants/ports'
 import { TIMEOUTS } from '@browseros/shared/constants/timeouts'
 import { logger } from '../../logger'
+import type { OAuthCallbackServer } from './callback-server'
 import { getOAuthProvider, type OAuthProviderConfig } from './providers'
 import type { OAuthTokenStore, StoredOAuthTokens } from './token-store'
 
@@ -58,6 +59,7 @@ export class OAuthTokenManager {
   constructor(
     private readonly store: OAuthTokenStore,
     private readonly browserosId: string,
+    private readonly callbackServer: OAuthCallbackServer,
   ) {}
 
   // --- PKCE flow (ChatGPT Plus/Pro) ---
@@ -66,6 +68,9 @@ export class OAuthTokenManager {
     providerId: string,
     redirectBackUrl?: string,
   ): Promise<string> {
+    // Lazily start callback server — only needed for PKCE flow
+    await this.callbackServer.ensureRunning()
+
     const provider = getOAuthProvider(providerId)
     if (!provider) throw new Error(`Unknown OAuth provider: ${providerId}`)
 
@@ -154,6 +159,7 @@ export class OAuthTokenManager {
 
     this.store.upsertTokens(this.browserosId, flow.provider, tokens)
     this.pendingFlows.delete(state)
+    this.stopCallbackIfIdle()
 
     logger.info('OAuth authentication successful', {
       provider: flow.provider,
@@ -442,6 +448,17 @@ export class OAuthTokenManager {
 
   deleteTokens(provider: string): void {
     this.store.deleteTokens(this.browserosId, provider)
+  }
+
+  stopCallbackServer(): void {
+    this.callbackServer.stop()
+  }
+
+  private stopCallbackIfIdle(): void {
+    const hasPkceFlows = [...this.pendingFlows.values()].some(() => true)
+    if (!hasPkceFlows) {
+      this.callbackServer.stop()
+    }
   }
 
   private cleanExpiredFlows(): void {
