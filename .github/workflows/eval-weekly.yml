@@ -4,6 +4,11 @@ on:
   schedule:
     # Every Saturday at 06:00 UTC
     - cron: '0 6 * * 6'
+  push:
+    branches: [main]
+    paths:
+      - 'packages/browseros-agent/apps/server/src/agent/**'
+      - 'packages/browseros-agent/apps/server/src/tools/**'
   workflow_dispatch:
     inputs:
       config:
