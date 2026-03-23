@@ -1221,6 +1221,12 @@
     const graders = task.graderResults || {};
     const keys = Object.keys(graders);
     if (keys.length === 0) return { label: '', cls: '' };
+    const firstKey = keys[0];
+    const score = graders[firstKey].score;
+    if (typeof score === 'number') {
+      const pct = Math.round(score * 100);
+      return { label: pct + '%', cls: pct >= 75 ? 'pass' : 'fail' };
+    }
     const anyPass = keys.some((k) => graders[k].pass);
     return { label: anyPass ? 'PASS' : 'FAIL', cls: anyPass ? 'pass' : 'fail' };
   }

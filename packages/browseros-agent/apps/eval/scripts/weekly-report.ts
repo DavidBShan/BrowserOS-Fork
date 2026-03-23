@@ -47,7 +47,7 @@ interface RunSummary {
   runId: string
   configName: string
   date: string
-  passRate: number
+  avgScore: number
   total: number
   completed: number
   failed: number
@@ -135,20 +135,20 @@ const runs: RunSummary[] = manifests
     const failed = m.tasks.filter((t) => t.status === 'failed').length
     const timeout = m.tasks.filter((t) => t.status === 'timeout').length
 
-    let graded = 0
-    let passed = 0
+    let scoredCount = 0
+    let scoreSum = 0
     for (const task of m.tasks) {
       if (!task.graderResults) continue
       for (const name of PASS_FAIL_GRADER_ORDER) {
         if (task.graderResults[name]) {
-          graded++
-          if (task.graderResults[name].pass) passed++
+          scoredCount++
+          scoreSum += task.graderResults[name].score ?? 0
           break
         }
       }
     }
 
-    const passRate = graded > 0 ? passed / graded : 0
+    const avgScore = scoredCount > 0 ? (scoreSum / scoredCount) * 100 : 0
     const durations = m.tasks
       .filter((t) => t.durationMs > 0)
       .map((t) => t.durationMs)
@@ -170,7 +170,7 @@ const runs: RunSummary[] = manifests
       runId: m.runId,
       configName,
       date,
-      passRate,
+      avgScore,
       total,
       completed,
       failed,
@@ -242,7 +242,7 @@ const html = `<!DOCTYPE html>
     .stat-value.big { font-size: 2.5rem; font-weight: 700; }
     .pass { color: #3fb950; }
     .fail { color: #f85149; }
-    .neutral { color: #8b949e; }
+    .neutral { color: #f0883e; }
     .trend-up { color: #3fb950; }
     .trend-down { color: #f85149; }
     .trend-flat { color: #8b949e; }
@@ -314,7 +314,7 @@ const html = `<!DOCTYPE html>
       <th>Model</th>
       <th>Dataset</th>
       <th>Architecture</th>
-      <th>Pass Rate</th>
+      <th>Score</th>
       <th>Tasks</th>
       <th>Timeout</th>
       <th>Avg Duration</th>
@@ -327,7 +327,6 @@ const html = `<!DOCTYPE html>
       .reverse()
       .map((r) => {
         const viewerUrl = `viewer.html?run=${encodeURIComponent(r.runId)}`
-        const passed = Math.round(r.passRate * r.total)
         const archLabel =
           r.agentType === 'orchestrator-executor'
             ? 'Orch-Exec'
@@ -342,7 +341,7 @@ const html = `<!DOCTYPE html>
       <td class="mono" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escHtml(r.model)}">${escHtml(r.model)}</td>
       <td>${escHtml(r.dataset)}</td>
       <td>${escHtml(archLabel)}</td>
-      <td class="${r.passRate >= 0.7 ? 'pass' : r.passRate >= 0.4 ? 'neutral' : 'fail'}">${(r.passRate * 100).toFixed(1)}% <span style="color:#6e7681;font-size:11px;">(${passed}/${r.total})</span></td>
+      <td class="${r.avgScore >= 75 ? 'pass' : r.avgScore >= 40 ? 'neutral' : 'fail'}">${r.avgScore.toFixed(1)}%</td>
       <td>${r.total}</td>
       <td class="${r.timeout > 0 ? 'neutral' : ''}">${r.timeout}</td>
       <td>${(r.avgDurationMs / 1000).toFixed(0)}s</td>
@@ -386,10 +385,12 @@ const html = `<!DOCTYPE html>
       : latest.agentType === 'single' ? 'Single Agent (Tool Loop)'
       : latest.agentType === 'gemini-computer-use' ? 'Gemini Computer Use'
       : latest.agentType || 'Unknown';
+    var scoreColor = latest.avgScore >= 75 ? '#3fb950' : latest.avgScore >= 40 ? '#f0883e' : '#f85149';
     el.innerHTML =
       '<div class="config-detail"><span class="cd-label">Architecture</span><span class="cd-value">' + archLabel + '</span></div>' +
       '<div class="config-detail"><span class="cd-label">Model</span><span class="cd-value">' + (latest.model || 'unknown') + '</span></div>' +
       '<div class="config-detail"><span class="cd-label">Dataset</span><span class="cd-value">' + (latest.dataset || 'unknown') + '</span></div>' +
+      '<div class="config-detail"><span class="cd-label">Latest Score</span><span class="cd-value" style="color:' + scoreColor + ';">' + latest.avgScore.toFixed(1) + '%</span></div>' +
       '<div class="config-detail"><span class="cd-label">Tasks</span><span class="cd-value">' + latest.total + '</span></div>' +
       '<div class="config-detail"><span class="cd-label">Runs</span><span class="cd-value">' + runs.length + '</span></div>';
   }
@@ -400,15 +401,16 @@ const html = `<!DOCTYPE html>
     if (runs.length === 0) { el.innerHTML = ''; return; }
     var latest = runs[runs.length - 1];
     var prev = runs.length >= 2 ? runs[runs.length - 2] : null;
-    var best = Math.max.apply(null, runs.map(function(r) { return r.passRate; }));
-    var delta = prev ? latest.passRate - prev.passRate : 0;
+    var best = Math.max.apply(null, runs.map(function(r) { return r.avgScore; }));
+    var delta = prev ? latest.avgScore - prev.avgScore : 0;
     var sign = delta > 0 ? '+' : '';
     var trendCls = delta > 0 ? 'trend-up' : delta < 0 ? 'trend-down' : 'trend-flat';
+    var latestColor = latest.avgScore >= 75 ? 'pass' : latest.avgScore >= 40 ? 'neutral' : 'fail';
 
     el.innerHTML =
-      '<div class="stat-card"><div class="stat-label">Latest Pass Rate</div><div class="stat-value big ' + (latest.passRate >= 0.7 ? 'pass' : 'fail') + '">' + (latest.passRate * 100).toFixed(1) + '%</div></div>' +
-      '<div class="stat-card"><div class="stat-label">Trend</div><div class="stat-value ' + trendCls + '">' + (prev ? sign + (delta * 100).toFixed(1) + ' pp' : 'N/A') + '</div></div>' +
-      '<div class="stat-card"><div class="stat-label">Best Score</div><div class="stat-value pass">' + (best * 100).toFixed(1) + '%</div></div>' +
+      '<div class="stat-card"><div class="stat-label">Latest Score</div><div class="stat-value big ' + latestColor + '">' + latest.avgScore.toFixed(1) + '%</div></div>' +
+      '<div class="stat-card"><div class="stat-label">Trend</div><div class="stat-value ' + trendCls + '">' + (prev ? sign + delta.toFixed(1) + ' pp' : 'N/A') + '</div></div>' +
+      '<div class="stat-card"><div class="stat-label">Best Score</div><div class="stat-value pass">' + best.toFixed(1) + '%</div></div>' +
       '<div class="stat-card"><div class="stat-label">Avg Duration</div><div class="stat-value">' + (latest.avgDurationMs / 1000).toFixed(0) + 's</div></div>' +
       '<div class="stat-card"><div class="stat-label">Runs</div><div class="stat-value">' + runs.length + '</div></div>';
   }
@@ -436,7 +438,7 @@ const html = `<!DOCTYPE html>
       return;
     }
 
-    var scores = runs.map(function(r) { return r.passRate * 100; });
+    var scores = runs.map(function(r) { return r.avgScore; });
     var minY = Math.max(0, Math.floor(Math.min.apply(null, scores) / 10) * 10 - 10);
     var maxY = Math.min(100, Math.ceil(Math.max.apply(null, scores) / 10) * 10 + 10);
     if (minY === maxY) { minY = Math.max(0, minY - 10); maxY = Math.min(100, maxY + 10); }
@@ -463,7 +465,7 @@ const html = `<!DOCTYPE html>
     ctx.strokeStyle = '#58a6ff'; ctx.lineWidth = 2; ctx.beginPath();
     runs.forEach(function(r, i) {
       var px = pad.left + (runs.length === 1 ? plotW / 2 : (i / (runs.length - 1)) * plotW);
-      var py2 = pad.top + plotH - ((r.passRate * 100 - minY) / (maxY - minY)) * plotH;
+      var py2 = pad.top + plotH - ((r.avgScore - minY) / (maxY - minY)) * plotH;
       if (i === 0) ctx.moveTo(px, py2); else ctx.lineTo(px, py2);
     });
     ctx.stroke();
@@ -471,10 +473,10 @@ const html = `<!DOCTYPE html>
     // Dots
     runs.forEach(function(r, i) {
       var px = pad.left + (runs.length === 1 ? plotW / 2 : (i / (runs.length - 1)) * plotW);
-      var py2 = pad.top + plotH - ((r.passRate * 100 - minY) / (maxY - minY)) * plotH;
+      var py2 = pad.top + plotH - ((r.avgScore - minY) / (maxY - minY)) * plotH;
       dotPositions.push({ x: px, y: py2, run: r });
       ctx.beginPath(); ctx.arc(px, py2, 4, 0, Math.PI * 2);
-      ctx.fillStyle = r.passRate >= 0.7 ? '#3fb950' : '#f85149';
+      ctx.fillStyle = r.avgScore >= 75 ? '#3fb950' : r.avgScore >= 40 ? '#f0883e' : '#f85149';
       ctx.fill(); ctx.strokeStyle = '#0d1117'; ctx.lineWidth = 2; ctx.stroke();
     });
   }
@@ -491,11 +493,10 @@ const html = `<!DOCTYPE html>
 
     if (closest && closestDist < 40) {
       var r = closest.run;
-      var passed = Math.round(r.passRate * r.total);
       document.getElementById('tt-date').textContent = r.date;
-      document.getElementById('tt-score').textContent = (r.passRate * 100).toFixed(1) + '%';
-      document.getElementById('tt-score').style.color = r.passRate >= 0.7 ? '#3fb950' : '#f85149';
-      document.getElementById('tt-detail').textContent = passed + '/' + r.total + ' pass \\u00B7 ' + (r.avgDurationMs / 1000).toFixed(0) + 's avg \\u00B7 ' + r.model;
+      document.getElementById('tt-score').textContent = r.avgScore.toFixed(1) + '%';
+      document.getElementById('tt-score').style.color = r.avgScore >= 75 ? '#3fb950' : r.avgScore >= 40 ? '#f0883e' : '#f85149';
+      document.getElementById('tt-detail').textContent = 'score ' + r.avgScore.toFixed(1) + '% \\u00B7 ' + r.total + ' tasks \\u00B7 ' + (r.avgDurationMs / 1000).toFixed(0) + 's avg \\u00B7 ' + r.model;
       tooltip.style.display = 'block';
 
       var tx = closest.x + 12, ty = closest.y - 50;
@@ -508,7 +509,7 @@ const html = `<!DOCTYPE html>
       ctx.beginPath(); ctx.arc(closest.x, closest.y, 7, 0, Math.PI * 2);
       ctx.fillStyle = 'rgba(88, 166, 255, 0.3)'; ctx.fill();
       ctx.beginPath(); ctx.arc(closest.x, closest.y, 5, 0, Math.PI * 2);
-      ctx.fillStyle = r.passRate >= 0.7 ? '#3fb950' : '#f85149'; ctx.fill();
+      ctx.fillStyle = r.avgScore >= 75 ? '#3fb950' : r.avgScore >= 40 ? '#f0883e' : '#f85149'; ctx.fill();
       ctx.strokeStyle = '#e6edf3'; ctx.lineWidth = 2; ctx.stroke();
       canvas.style.cursor = 'pointer';
     } else {
@@ -584,7 +585,7 @@ console.log(`  View at: ${cdnBaseUrl}/report.html`)
 // Print summary
 console.log('\nScore trend:')
 for (const run of runs.slice(-10)) {
-  const bar = '\u2588'.repeat(Math.round(run.passRate * 20))
-  const pct = (run.passRate * 100).toFixed(0).padStart(3)
+  const bar = '\u2588'.repeat(Math.round(run.avgScore / 5))
+  const pct = run.avgScore.toFixed(0).padStart(3)
   console.log(`  ${run.date}  ${pct}% ${bar}`)
 }
