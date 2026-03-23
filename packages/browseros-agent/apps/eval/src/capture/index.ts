@@ -1,4 +1,5 @@
 export { callMcpTool } from '../utils/mcp-client'
+export { CaptchaWaiter } from './captcha-waiter'
 export { CaptureContext } from './context'
 export { MessageLogger } from './message-logger'
 export { ScreenshotCapture } from './screenshot'

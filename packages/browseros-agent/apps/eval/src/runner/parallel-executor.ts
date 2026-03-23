@@ -93,6 +93,15 @@ export class ParallelExecutor {
       BrowserOSAppManager.buildExtensions()
     }
 
+    // Patch NopeCHA API key before launching any workers
+    const captchaConfig = this.config.config.captcha
+    if (captchaConfig) {
+      const apiKey = process.env[captchaConfig.api_key_env]
+      if (apiKey) {
+        BrowserOSAppManager.patchNopechaApiKey(apiKey)
+      }
+    }
+
     this.queue = new TaskQueue(tasks)
     const totalTasks = tasks.length
 

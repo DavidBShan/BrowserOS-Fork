@@ -14,7 +14,13 @@
  * Each worker gets isolated ports: base + workerIndex offset.
  */
 
-import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { type Subprocess, spawn, spawnSync } from 'bun'
@@ -37,7 +43,7 @@ const BROWSEROS_BINARY =
 const CONTROLLER_EXT_DIR = join(MONOREPO_ROOT, 'apps/controller-ext/dist')
 const CAPTCHA_EXT_DIR = join(
   dirname(fileURLToPath(import.meta.url)),
-  '../../../extensions/nopecha',
+  '../../extensions/nopecha',
 )
 
 export class BrowserOSAppManager {
@@ -149,7 +155,6 @@ export class BrowserOSAppManager {
       '--use-mock-keychain',
       '--disable-browseros-server',
       '--disable-browseros-extensions',
-      '--incognito',
       ...(this.headless ? ['--headless=new'] : []),
       '--window-size=1440,900',
       `--remote-debugging-port=${cdp}`,
@@ -318,5 +323,23 @@ export class BrowserOSAppManager {
       ],
     })
     return (result.stdout?.toString().trim() ?? '').length > 0
+  }
+
+  /**
+   * Patch NopeCHA extension manifest with API key.
+   * Call once before launching any workers — the extension directory is shared.
+   */
+  static patchNopechaApiKey(apiKey: string): void {
+    const manifestPath = join(CAPTCHA_EXT_DIR, 'manifest.json')
+    if (!existsSync(manifestPath)) {
+      console.log(
+        '[BROWSEROS] NopeCHA extension not found, skipping API key patch',
+      )
+      return
+    }
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf-8'))
+    manifest.nopecha = { ...manifest.nopecha, key: apiKey }
+    writeFileSync(manifestPath, JSON.stringify(manifest, null, 2))
+    console.log('[BROWSEROS] NopeCHA API key patched')
   }
 }

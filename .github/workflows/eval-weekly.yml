@@ -43,6 +43,9 @@ jobs:
         working-directory: packages/browseros-agent
         run: bun install --ignore-scripts && bun run build:agent-sdk
 
+      - name: Install xvfb
+        run: sudo apt-get update && sudo apt-get install -y xvfb
+
       - name: Install captcha solver extension
         working-directory: packages/browseros-agent/apps/eval
         run: |
@@ -55,11 +58,12 @@ jobs:
         env:
           FIREWORKS_API_KEY: ${{ secrets.FIREWORKS_API_KEY }}
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          NOPECHA_API_KEY: ${{ secrets.NOPECHA_API_KEY }}
           BROWSEROS_BINARY: /usr/bin/browseros
           EVAL_CONFIG: ${{ github.event.inputs.config || 'configs/browseros-agent-weekly.json' }}
         run: |
           echo "Running eval with config: $EVAL_CONFIG"
-          bun run src/index.ts -c "$EVAL_CONFIG"
+          xvfb-run --auto-servernum --server-args="-screen 0 1440x900x24" bun run src/index.ts -c "$EVAL_CONFIG"
 
       - name: Upload runs to R2
         if: success()

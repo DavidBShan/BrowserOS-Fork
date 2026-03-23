@@ -11,6 +11,7 @@
 import type { ResolvedAgentConfig } from '@browseros/server/agent/types'
 import { Browser } from '@browseros/server/browser'
 import { CdpBackend } from '@browseros/server/browser/backends/cdp'
+import { CaptchaWaiter } from '../../capture/captcha-waiter'
 import { DEFAULT_TIMEOUT_MS } from '../../constants'
 import type {
   EvalConfig,
@@ -161,6 +162,13 @@ export class OrchestratorExecutorEvaluator implements AgentEvaluator {
     const browser = new Browser(cdp, CONTROLLER_STUB)
     capture.screenshot.setBrowser(browser)
 
+    const captchaWaiter = config.captcha
+      ? new CaptchaWaiter({
+          waitTimeoutMs: config.captcha.wait_timeout_ms,
+          pollIntervalMs: config.captcha.poll_interval_ms,
+        })
+      : null
+
     try {
       // Build capture callbacks (same pattern as single-agent.ts)
       const callbacks: ExecutorCallbacks = {
@@ -172,6 +180,12 @@ export class OrchestratorExecutorEvaluator implements AgentEvaluator {
         },
         onToolCallFinish: async () => {
           try {
+            if (captchaWaiter) {
+              await captchaWaiter.waitIfCaptchaPresent(
+                browser,
+                capture.getActivePageId(),
+              )
+            }
             const screenshotNum = await capture.screenshot.capture(
               capture.getActivePageId(),
             )

@@ -16,7 +16,10 @@
     "base_server_port": 9110,
     "base_extension_port": 9310,
     "load_extensions": false,
-    "headless": true
+    "headless": false
+  },
+  "captcha": {
+    "api_key_env": "NOPECHA_API_KEY"
   },
   "graders": ["performance_grader"],
   "grader_api_key_env": "OPENROUTER_API_KEY",

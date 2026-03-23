@@ -7,6 +7,7 @@ import type { ResolvedAgentConfig } from '@browseros/server/agent/types'
 import { Browser } from '@browseros/server/browser'
 import { CdpBackend } from '@browseros/server/browser/backends/cdp'
 import { registry } from '@browseros/server/tools/registry'
+import { CaptchaWaiter } from '../capture/captcha-waiter'
 import { DEFAULT_TIMEOUT_MS } from '../constants'
 import type { EvalConfig, TaskMetadata } from '../types'
 import { resolveProviderConfig } from '../utils/resolve-provider-config'
@@ -78,6 +79,13 @@ export class SingleAgentEvaluator implements AgentEvaluator {
         }
       : undefined
 
+    const captchaWaiter = config.captcha
+      ? new CaptchaWaiter({
+          waitTimeoutMs: config.captcha.wait_timeout_ms,
+          pollIntervalMs: config.captcha.poll_interval_ms,
+        })
+      : null
+
     let agent: AiSdkAgent | null = null
 
     try {
@@ -112,6 +120,12 @@ export class SingleAgentEvaluator implements AgentEvaluator {
 
             experimental_onToolCallFinish: async () => {
               try {
+                if (captchaWaiter) {
+                  await captchaWaiter.waitIfCaptchaPresent(
+                    browser,
+                    capture.getActivePageId(),
+                  )
+                }
                 const screenshotNum = await capture.screenshot.capture(
                   capture.getActivePageId(),
                 )

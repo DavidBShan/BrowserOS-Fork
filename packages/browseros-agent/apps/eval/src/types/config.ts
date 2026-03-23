@@ -71,6 +71,13 @@ export const EvalConfigSchema = z.object({
   grader_api_key_env: z.string().optional(),
   grader_base_url: z.string().url().optional(),
   timeout_ms: z.number().int().min(30000).max(3600000).optional(),
+  captcha: z
+    .object({
+      api_key_env: z.string().default('NOPECHA_API_KEY'),
+      wait_timeout_ms: z.number().int().min(1000).max(120000).default(30000),
+      poll_interval_ms: z.number().int().min(200).max(5000).default(1000),
+    })
+    .optional(),
 })
 
 export type SingleAgentConfig = z.infer<typeof SingleAgentConfigSchema>
