@@ -29,19 +29,30 @@ make            # Build binary
 make install    # Install to $GOPATH/bin
 ```
 
-## Setup
+## Quick Start
 
 ```bash
-# First run — configure server connection
-browseros-cli init
+# If BrowserOS is not installed yet
+browseros-cli install                # downloads BrowserOS for your platform
+
+# If BrowserOS is installed but not running
+browseros-cli launch                 # opens BrowserOS, waits for server
+
+# Configure the CLI (auto-discovers running BrowserOS)
+browseros-cli init --auto            # detects server URL and saves config
+
+# Verify connection
+browseros-cli health
 ```
 
-The `init` command prompts for your MCP server URL. Find it in:
-**BrowserOS → Settings → BrowserOS MCP → Server URL**
+### Other init modes
 
-The port varies per installation (e.g., `http://127.0.0.1:9004/mcp`).
+```bash
+browseros-cli init <url>             # non-interactive — pass URL directly
+browseros-cli init                   # interactive — prompts for URL
+```
 
-Config is saved to `~/.config/browseros-cli/config.yaml`.
+Config is saved to `~/.config/browseros-cli/config.yaml`. The CLI also auto-discovers the server from `~/.browseros/server.json` (written by BrowserOS on startup).
 
 ## Usage
 
@@ -105,9 +116,9 @@ To connect Claude Code, Gemini CLI, or any MCP client, see the [MCP setup guide]
 | `--debug` | `BOS_DEBUG=1` | Debug output |
 | `--timeout, -t` | | Request timeout (default: 2m) |
 
-Priority for server URL: `--server` flag > `BROWSEROS_URL` env > config file
+Priority for server URL: `--server` flag > `BROWSEROS_URL` env > `~/.browseros/server.json` > config file
 
-If no server URL is configured, the CLI exits with setup instructions instead of assuming a localhost port.
+If no server URL is configured, the CLI exits with setup instructions pointing to `install`, `launch`, and `init`.
 
 ## Testing
 
@@ -158,7 +169,9 @@ apps/cli/
 │   └── config.go       # Config file (~/.config/browseros-cli/config.yaml)
 ├── cmd/
 │   ├── root.go         # Root command, global flags
-│   ├── init.go         # Server URL configuration
+│   ├── init.go         # Server URL configuration (URL arg, --auto, interactive)
+│   ├── install.go      # install (download BrowserOS for current platform)
+│   ├── launch.go       # launch (find and start BrowserOS, wait for server)
 │   ├── open.go         # open (new_page / new_hidden_page)
 │   ├── nav.go          # nav, back, forward, reload
 │   ├── pages.go        # pages, active, close
