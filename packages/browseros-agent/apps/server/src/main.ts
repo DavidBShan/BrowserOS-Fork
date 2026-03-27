@@ -116,6 +116,7 @@ export class Application {
         server_version: VERSION,
         browseros_version: this.config.instanceBrowserosVersion,
         chromium_version: this.config.instanceChromiumVersion,
+        browseros_id: identity.getBrowserOSId(),
       })
     } catch (error) {
       logger.warn('Failed to write server config for auto-discovery', {

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"browseros-cli/analytics"
 	"browseros-cli/config"
 	"browseros-cli/mcp"
 	"browseros-cli/output"
@@ -113,9 +114,25 @@ var rootCmd = &cobra.Command{
 }
 
 func Execute() {
-	if err := rootCmd.Execute(); err != nil {
+	analytics.Init(version)
+	start := time.Now()
+
+	err := rootCmd.Execute()
+
+	analytics.Track(commandName(os.Args[1:]), err == nil, time.Since(start))
+	analytics.Close()
+
+	if err != nil {
 		os.Exit(1)
 	}
+}
+
+func commandName(args []string) string {
+	cmd, _, err := rootCmd.Find(args)
+	if err != nil || cmd == rootCmd {
+		return "unknown"
+	}
+	return cmd.CommandPath()
 }
 
 func init() {

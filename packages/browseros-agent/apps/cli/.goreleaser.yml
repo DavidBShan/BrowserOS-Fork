@@ -13,7 +13,7 @@ builds:
     flags:
       - -trimpath
     ldflags:
-      - -s -w -X main.version={{ .Version }}
+      - -s -w -X main.version={{ .Version }} -X browseros-cli/analytics.posthogAPIKey={{ .Env.POSTHOG_API_KEY }}
     targets:
       - darwin_amd64
       - darwin_arm64
