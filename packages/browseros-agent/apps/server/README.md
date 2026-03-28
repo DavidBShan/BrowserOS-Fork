@@ -29,23 +29,22 @@ MCP server and AI agent loop powering BrowserOS browser automation. This is the 
 │   │  └── MCP client for external tool servers                    │   │
 │   └─────────────────────────────────────────────────────────────┘   │
 │                                                                      │
-│   ┌────────────────────┐    ┌────────────────────────────────────┐  │
-│   │  CDP Tools          │    │  Controller Tools                  │  │
-│   │  (screenshots,      │    │  (tabs, bookmarks, history,        │  │
-│   │   DOM, network,     │    │   navigation, tab groups)          │  │
-│   │   console, input)   │    │                                    │  │
-│   └────────────────────┘    └────────────────────────────────────┘  │
+│   ┌─────────────────────────────────────────────────────────────┐   │
+│   │  CDP-backed browser tools                                   │   │
+│   │  (tabs, bookmarks, history, navigation, tab groups,         │   │
+│   │   screenshots, DOM, network, console, input)                │   │
+│   └─────────────────────────────────────────────────────────────┘   │
 └──────────────────────────────────────────────────────────────────────┘
-          │                                         │
-          │ Chrome DevTools Protocol                │ WebSocket
-          ▼                                         ▼
-┌─────────────────────┐              ┌─────────────────────────────────┐
-│   Chromium CDP       │              │   Controller Extension          │
-│  (port 9000)         │              │  (port 9300)                    │
-│                      │              │                                 │
-│  DOM, network,       │              │  chrome.tabs, chrome.history,   │
-│  input, screenshots  │              │  chrome.bookmarks               │
-└─────────────────────┘              └─────────────────────────────────┘
+                                │
+                                │ Chrome DevTools Protocol
+                                ▼
+                     ┌─────────────────────┐
+                     │   Chromium CDP      │
+                     │  (port 9000)        │
+                     │                     │
+                     │  DOM, network,      │
+                     │  input, screenshots │
+                     └─────────────────────┘
 ```
 
 ## MCP Tools
@@ -137,7 +136,7 @@ apps/server/
 ### Prerequisites
 
 - [Bun](https://bun.sh) runtime
-- A running BrowserOS instance (for CDP and controller connections)
+- A running BrowserOS instance (for CDP connectivity)
 
 ### Setup
 
@@ -178,4 +177,4 @@ bun scripts/build/server.ts --target=all --no-upload
 |------|-------------|---------|
 | 9100 | `BROWSEROS_SERVER_PORT` | HTTP server (MCP, chat, health) |
 | 9000 | `BROWSEROS_CDP_PORT` | Chromium CDP (server connects as client) |
-| 9300 | `BROWSEROS_EXTENSION_PORT` | WebSocket for controller extension |
+| 9300 | `BROWSEROS_EXTENSION_PORT` | Legacy BrowserOS launch arg kept for compatibility |

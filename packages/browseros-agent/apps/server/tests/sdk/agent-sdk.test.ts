@@ -11,7 +11,6 @@ import assert from 'node:assert'
 import { Agent } from '@browseros-ai/agent-sdk'
 
 import { CdpBackend } from '../../src/browser/backends/cdp'
-import type { ControllerBackend } from '../../src/browser/backends/types'
 import { Browser } from '../../src/browser/browser'
 import {
   ensureBrowserOS,
@@ -22,15 +21,6 @@ let config: TestEnvironmentConfig
 let cdp: CdpBackend | null = null
 let runtimeWindowId: number
 
-const stubController: ControllerBackend = {
-  start: async () => {},
-  stop: async () => {},
-  isConnected: () => false,
-  send: async () => {
-    throw new Error('Controller not available in SDK tests')
-  },
-}
-
 async function getRuntimeWindow(
   testConfig: TestEnvironmentConfig,
 ): Promise<number> {
@@ -38,7 +28,7 @@ async function getRuntimeWindow(
   await runtimeCdp.connect()
   cdp = runtimeCdp
 
-  const browser = new Browser(runtimeCdp, stubController)
+  const browser = new Browser(runtimeCdp)
   const pages = await browser.listPages()
   const page =
     pages.find((entry) => !entry.isHidden && entry.windowId !== undefined) ??

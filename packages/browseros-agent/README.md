@@ -10,7 +10,6 @@ apps/
   agent/           # Agent UI (Chrome extension)
   cli/             # Go CLI for controlling BrowserOS from the terminal
   eval/            # Evaluation framework for benchmarking agents
-  controller-ext/  # BrowserOS Controller (Chrome extension for chrome.* APIs)
 
 packages/
   agent-sdk/       # Node.js SDK (@browseros-ai/agent-sdk)
@@ -24,7 +23,6 @@ packages/
 | `apps/agent` | Agent UI — Chrome extension for the chat interface |
 | `apps/cli` | Go CLI — control BrowserOS from the terminal or AI coding agents |
 | `apps/eval` | Benchmark framework — WebVoyager, Mind2Web evaluation |
-| `apps/controller-ext` | BrowserOS Controller — bridges `chrome.*` APIs to the server via WebSocket |
 | `packages/agent-sdk` | Node.js SDK for browser automation with natural language |
 | `packages/cdp-protocol` | Auto-generated CDP type bindings used by the server |
 | `packages/shared` | Shared constants used across packages |
@@ -33,7 +31,6 @@ packages/
 
 - `apps/server`: Bun server which contains the agent loop and tools.
 - `apps/agent`: Agent UI (Chrome extension).
-- `apps/controller-ext`: BrowserOS Controller - a Chrome extension that bridges `chrome.*` APIs to the server. Controller tools within the server communicate with this extension via WebSocket.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
@@ -51,19 +48,19 @@ packages/
 │   /health ─── Health check                                               │
 │                                                                          │
 │   Tools:                                                                 │
-│   ├── CDP Tools (console, network, input, screenshot, ...)              │
-│   └── Controller Tools (tabs, navigation, clicks, bookmarks, history)   │
+│   └── CDP-backed browser tools (tabs, navigation, input, screenshots,   │
+│       bookmarks, history, console, DOM, tab groups, windows, ...)       │
 └──────────────────────────────────────────────────────────────────────────┘
-          │                                         │
-          │ CDP (client)                            │ WebSocket (server)
-          ▼                                         ▼
-┌─────────────────────┐              ┌─────────────────────────────────────┐
-│   Chromium CDP      │              │   BrowserOS Controller Extension    │
-│  (cdpPort: 9000)    │              │     (extensionPort: 9300)           │
-│                     │              │                                     │
-│ Server connects     │              │ Bridges chrome.tabs, chrome.history │
-│ TO this as client   │              │ chrome.bookmarks to the server      │
-└─────────────────────┘              └─────────────────────────────────────┘
+                                    │
+                                    │ CDP (client)
+                                    ▼
+                         ┌─────────────────────┐
+                         │   Chromium CDP      │
+                         │  (cdpPort: 9000)    │
+                         │                     │
+                         │ Server connects     │
+                         │ TO this as client   │
+                         └─────────────────────┘
 ```
 
 ### Ports
@@ -72,7 +69,7 @@ packages/
 |------|--------------|---------|
 | 9100 | `BROWSEROS_SERVER_PORT` | HTTP server - MCP endpoints, agent chat, health |
 | 9000 | `BROWSEROS_CDP_PORT` | Chromium CDP server (BrowserOS Server connects as client) |
-| 9300 | `BROWSEROS_EXTENSION_PORT` | WebSocket server for controller extension |
+| 9300 | `BROWSEROS_EXTENSION_PORT` | Legacy BrowserOS launch arg kept for compatibility; not used by the server |
 
 ## Development
 
@@ -96,9 +93,8 @@ process-compose up
 
 The `process-compose up` command runs the following in order:
 1. `bun install` — installs dependencies
-2. `bun --cwd apps/controller-ext build` — builds the controller extension
-3. `bun --cwd apps/agent codegen` — generates agent code
-4. `bun --cwd apps/server start` and `bun --cwd apps/agent dev` — starts server and agent in parallel
+2. `bun --cwd apps/agent codegen` — generates agent code
+3. `bun --cwd apps/server start` and `bun --cwd apps/agent dev` — starts server and agent in parallel
 
 ### Environment Variables
 
@@ -114,7 +110,7 @@ Runtime uses `.env.development`, while production artifact builds use `.env.prod
 |----------|---------|-------------|
 | `BROWSEROS_SERVER_PORT` | 9100 | HTTP server port (MCP, chat, health) |
 | `BROWSEROS_CDP_PORT` | 9000 | Chromium CDP port (server connects as client) |
-| `BROWSEROS_EXTENSION_PORT` | 9300 | WebSocket port for controller extension |
+| `BROWSEROS_EXTENSION_PORT` | 9300 | Legacy BrowserOS launch arg kept for compatibility |
 | `BROWSEROS_CONFIG_URL` | - | Remote config endpoint for rate limits |
 | `BROWSEROS_INSTALL_ID` | - | Unique installation identifier (analytics) |
 | `BROWSEROS_CLIENT_ID` | - | Client identifier (analytics) |
@@ -146,7 +142,7 @@ Copy from `apps/server/.env.production.example` before running `build:server`.
 |----------|---------|-------------|
 | `BROWSEROS_SERVER_PORT` | 9100 | Passed to BrowserOS via CLI args |
 | `BROWSEROS_CDP_PORT` | 9000 | Passed to BrowserOS via CLI args |
-| `BROWSEROS_EXTENSION_PORT` | 9300 | Passed to BrowserOS via CLI args |
+| `BROWSEROS_EXTENSION_PORT` | 9300 | Legacy BrowserOS CLI arg still passed for compatibility |
 | `VITE_BROWSEROS_SERVER_PORT` | 9100 | Agent UI connects to server (must match `BROWSEROS_SERVER_PORT`) |
 | `BROWSEROS_BINARY` | - | Path to BrowserOS binary |
 | `USE_BROWSEROS_BINARY` | true | Use BrowserOS instead of default Chrome |
@@ -163,15 +159,13 @@ bun run start:server          # Start the server
 bun run start:agent           # Start agent extension (dev mode)
 
 # Build
-bun run build                 # Build server, agent, and controller extension
+bun run build                 # Build server and agent
 bun run build:server          # Build production server resource artifacts and upload zips to R2
 bun run build:agent           # Build agent extension
-bun run build:ext             # Build controller extension
 
 # Test
 bun run test                  # Run standard tests
 bun run test:cdp              # Run CDP-based tests
-bun run test:controller       # Run controller-based tests
 bun run test:integration      # Run integration tests
 
 # Quality

@@ -179,7 +179,7 @@ The `apiKey` field supports two formats:
 }
 ```
 
-Each worker gets its own Chrome instance. Worker N uses `base_port + N` for CDP, server, and extension ports.
+Each worker gets its own Chrome instance. Worker N uses `base_port + N` for CDP and server ports. `base_extension_port` is still reserved as a legacy BrowserOS launch argument for compatibility with Chromium builds that still pass it.
 
 ### Execution settings
 
