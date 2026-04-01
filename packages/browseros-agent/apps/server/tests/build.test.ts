@@ -18,7 +18,6 @@ import {
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
-// Derive the build target from the current platform so the test is portable
 function getNativeTarget(): { id: string; ext: string } {
   const os =
     process.platform === 'darwin'
@@ -30,7 +29,22 @@ function getNativeTarget(): { id: string; ext: string } {
   return { id: `${os}-${cpu}`, ext: process.platform === 'win32' ? '.exe' : '' }
 }
 
-// Stub values so the build config validation passes without real secrets
+const REQUIRED_INLINE_ENV_KEYS = [
+  'BROWSEROS_CONFIG_URL',
+  'CODEGEN_SERVICE_URL',
+  'POSTHOG_API_KEY',
+  'SENTRY_DSN',
+] as const
+
+const R2_ENV_KEYS = [
+  'R2_ACCOUNT_ID',
+  'R2_ACCESS_KEY_ID',
+  'R2_SECRET_ACCESS_KEY',
+  'R2_BUCKET',
+] as const
+
+const PROD_SECRET_KEYS = [...REQUIRED_INLINE_ENV_KEYS, ...R2_ENV_KEYS]
+
 const INLINE_ENV_STUBS: Record<string, string> = {
   BROWSEROS_CONFIG_URL: 'https://stub.test/config',
   CODEGEN_SERVICE_URL: 'https://stub.test/codegen',
@@ -53,6 +67,10 @@ describe('server build', () => {
     rootDir,
     'apps/server/.env.production.example',
   )
+  const originalProdEnv = existsSync(prodEnvPath)
+    ? readFileSync(prodEnvPath, 'utf-8')
+    : null
+  const prodEnvTemplate = readFileSync(prodEnvTemplatePath, 'utf-8')
   const buildScript = resolve(rootDir, 'scripts/build/server.ts')
   const target = getNativeTarget()
   const binaryPath = resolve(
@@ -63,23 +81,16 @@ describe('server build', () => {
     rootDir,
     `dist/prod/server/browseros-server-resources-${target.id}.zip`,
   )
-  const createdProdEnv = !existsSync(prodEnvPath)
-
-  // Empty manifest so the build skips R2 resource downloads
   const tempDir = mkdtempSync(join(tmpdir(), 'browseros-build-test-'))
   const emptyManifestPath = join(tempDir, 'empty-manifest.json')
   writeFileSync(emptyManifestPath, JSON.stringify({ resources: [] }))
-  if (createdProdEnv) {
-    writeFileSync(prodEnvPath, readFileSync(prodEnvTemplatePath, 'utf-8'))
-  }
 
   function buildEnv(
     extraEnv: Record<string, string>,
-    omitKeys: string[] = [],
+    omitKeys: readonly string[] = [],
   ): NodeJS.ProcessEnv {
     const env: NodeJS.ProcessEnv = {
       ...process.env,
-      ...INLINE_ENV_STUBS,
       ...extraEnv,
     }
     for (const key of omitKeys) {
@@ -88,14 +99,21 @@ describe('server build', () => {
     return env
   }
 
+  function resetProdEnvToTemplate(): void {
+    writeFileSync(prodEnvPath, prodEnvTemplate)
+  }
+
   afterAll(() => {
     rmSync(tempDir, { recursive: true, force: true })
-    if (createdProdEnv) {
+    if (originalProdEnv === null) {
       rmSync(prodEnvPath, { force: true })
+      return
     }
+    writeFileSync(prodEnvPath, originalProdEnv)
   })
 
   it('compiles and --version outputs correct version', async () => {
+    resetProdEnvToTemplate()
     const pkg = await Bun.file(serverPkgPath).json()
     const expectedVersion: string = pkg.version
 
@@ -111,7 +129,7 @@ describe('server build', () => {
         cwd: rootDir,
         stdout: 'pipe',
         stderr: 'pipe',
-        env: buildEnv(R2_ENV_STUBS),
+        env: buildEnv({ ...INLINE_ENV_STUBS, ...R2_ENV_STUBS }),
       },
     )
     const buildExit = await build.exited
@@ -138,33 +156,45 @@ describe('server build', () => {
     assert.strictEqual(versionOutput.trim(), expectedVersion)
   }, 300_000)
 
-  it('archives compile-only builds without R2 config', async () => {
-    rmSync(zipPath, { force: true })
+  it('keeps compile-only on the strict production validation path', async () => {
+    resetProdEnvToTemplate()
 
     const build = Bun.spawn(
-      [
-        'bun',
-        buildScript,
-        `--target=${target.id}`,
-        '--compile-only',
-        '--archive-compiled',
-      ],
+      ['bun', buildScript, `--target=${target.id}`, '--compile-only'],
       {
         cwd: rootDir,
         stdout: 'pipe',
         stderr: 'pipe',
-        env: buildEnv({}, [
-          'R2_ACCOUNT_ID',
-          'R2_ACCESS_KEY_ID',
-          'R2_SECRET_ACCESS_KEY',
-          'R2_BUCKET',
-        ]),
+        env: buildEnv({}, PROD_SECRET_KEYS),
+      },
+    )
+    const buildExit = await build.exited
+    const stderr = await new Response(build.stderr).text()
+
+    assert.notStrictEqual(buildExit, 0, 'Compile-only build should fail')
+    assert.match(stderr, /Production build requires variables:/)
+    assert.match(stderr, /CODEGEN_SERVICE_URL/)
+    assert.match(stderr, /POSTHOG_API_KEY/)
+    assert.match(stderr, /SENTRY_DSN/)
+  }, 300_000)
+
+  it('archives CI builds without R2 config or production env secrets', async () => {
+    resetProdEnvToTemplate()
+    rmSync(zipPath, { force: true })
+
+    const build = Bun.spawn(
+      ['bun', buildScript, `--target=${target.id}`, '--ci'],
+      {
+        cwd: rootDir,
+        stdout: 'pipe',
+        stderr: 'pipe',
+        env: buildEnv({}, PROD_SECRET_KEYS),
       },
     )
     const buildExit = await build.exited
     if (buildExit !== 0) {
       const stderr = await new Response(build.stderr).text()
-      assert.fail(`Compile-only archive failed (exit ${buildExit}):\n${stderr}`)
+      assert.fail(`CI build failed (exit ${buildExit}):\n${stderr}`)
     }
 
     assert.ok(existsSync(zipPath), `Expected archive at ${zipPath}`)

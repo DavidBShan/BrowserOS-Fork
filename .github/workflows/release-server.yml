@@ -53,11 +53,6 @@ jobs:
           fi
 
       - name: Build release artifacts
-        env:
-          BROWSEROS_CONFIG_URL: ${{ secrets.BROWSEROS_CONFIG_URL }}
-          CODEGEN_SERVICE_URL: ${{ secrets.CODEGEN_SERVICE_URL }}
-          POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
-          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
         run: bun run build:server:ci
 
       - name: Verify release artifacts

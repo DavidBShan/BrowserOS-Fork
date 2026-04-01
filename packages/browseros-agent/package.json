@@ -19,7 +19,7 @@
     "start:agent": "bun run --filter @browseros/agent dev",
     "build": "bun run build:server && bun run build:agent",
     "build:server": "FORCE_COLOR=1 bun scripts/build/server.ts --target=all",
-    "build:server:ci": "FORCE_COLOR=1 bun scripts/build/server.ts --target=all --compile-only --archive-compiled",
+    "build:server:ci": "FORCE_COLOR=1 bun scripts/build/server.ts --target=all --ci",
     "build:server:test": "FORCE_COLOR=1 bun scripts/build/server.ts --target=darwin-arm64 --no-upload",
     "upload:cli-installers": "bun scripts/build/cli.ts",
     "start:server:test": "bun run build:server:test && set -a && . apps/server/.env.development && set +a && dist/prod/server/.tmp/binaries/browseros-server-darwin-arm64",

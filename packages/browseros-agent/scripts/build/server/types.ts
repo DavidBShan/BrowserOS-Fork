@@ -22,7 +22,7 @@ export interface BuildArgs {
   manifestPath: string
   upload: boolean
   compileOnly: boolean
-  archiveCompiled: boolean
+  ci: boolean
 }
 
 export interface R2Config {

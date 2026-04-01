@@ -23,11 +23,11 @@ export function parseBuildArgs(argv: string[]): BuildArgs {
     .option('--no-upload', 'Skip zip upload to R2')
     .option(
       '--compile-only',
-      'Compile binaries only (skip R2 staging and upload)',
+      'Compile binaries only (skip artifact packaging, R2 staging, and upload)',
     )
     .option(
-      '--archive-compiled',
-      'Archive compile-only binaries into local zip files without R2 resources',
+      '--ci',
+      'Build local release zip artifacts for CI without R2 and without requiring production env secrets',
     )
   program.parse(argv, { from: 'user' })
   const options = program.opts<{
@@ -35,20 +35,23 @@ export function parseBuildArgs(argv: string[]): BuildArgs {
     manifest: string
     upload: boolean
     compileOnly: boolean
-    archiveCompiled: boolean
+    ci: boolean
   }>()
 
   const compileOnly = options.compileOnly ?? false
-  const archiveCompiled = options.archiveCompiled ?? false
-  if (archiveCompiled && !compileOnly) {
-    throw new Error('--archive-compiled requires --compile-only')
+  const ci = options.ci ?? false
+  if (ci && compileOnly) {
+    throw new Error('--ci cannot be combined with --compile-only')
+  }
+  if (ci && options.upload) {
+    throw new Error('--ci cannot be combined with --upload')
   }
 
   return {
     targets: resolveTargets(options.target),
     manifestPath: options.manifest,
-    upload: compileOnly ? false : (options.upload ?? true),
+    upload: ci || compileOnly ? false : (options.upload ?? true),
     compileOnly,
-    archiveCompiled,
+    ci,
   }
 }
