@@ -25,20 +25,30 @@ export function parseBuildArgs(argv: string[]): BuildArgs {
       '--compile-only',
       'Compile binaries only (skip R2 staging and upload)',
     )
+    .option(
+      '--archive-compiled',
+      'Archive compile-only binaries into local zip files without R2 resources',
+    )
   program.parse(argv, { from: 'user' })
   const options = program.opts<{
     target: string
     manifest: string
     upload: boolean
     compileOnly: boolean
+    archiveCompiled: boolean
   }>()
 
   const compileOnly = options.compileOnly ?? false
+  const archiveCompiled = options.archiveCompiled ?? false
+  if (archiveCompiled && !compileOnly) {
+    throw new Error('--archive-compiled requires --compile-only')
+  }
 
   return {
     targets: resolveTargets(options.target),
     manifestPath: options.manifest,
     upload: compileOnly ? false : (options.upload ?? true),
     compileOnly,
+    archiveCompiled,
   }
 }
