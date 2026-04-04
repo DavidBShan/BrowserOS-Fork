@@ -8,6 +8,7 @@ export interface ExecutorResult {
   url: string
   actionsPerformed: number
   toolsUsed: string[]
+  screenshotDataUrl?: string
 }
 
 export interface ExecutorConfig {

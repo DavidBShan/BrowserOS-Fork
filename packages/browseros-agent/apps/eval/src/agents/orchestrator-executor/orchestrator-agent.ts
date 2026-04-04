@@ -45,6 +45,7 @@ Each executor result includes:
 - Observation: what the executor saw and did
 - URL: current page URL
 - Actions performed: number of browser actions taken
+- Screenshot: when available, the tool output includes a data URL of the current page
 
 Use the observation to understand the current browser state and plan your next step.`
 
@@ -147,6 +148,12 @@ export class OrchestratorAgent {
 Observation:
 ${result.observation}`
         state.lastObservation = observation
+        if (result.screenshotDataUrl) {
+          return {
+            observation,
+            screenshotDataUrl: result.screenshotDataUrl,
+          }
+        }
         return observation
       },
     })
