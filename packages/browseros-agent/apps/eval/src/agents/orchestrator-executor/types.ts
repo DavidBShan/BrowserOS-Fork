@@ -43,3 +43,17 @@ export type ExecutorFactory = (
   instruction: string,
   signal: AbortSignal,
 ) => Promise<ExecutorResult>
+
+export interface OrchestratorRecentDelegation {
+  instruction: string
+  status: ExecutorResult['status']
+  actionsPerformed: number
+  outcomeSummary: string
+}
+
+export interface OrchestratorBootstrap {
+  taskQuery: string
+  observation: string
+  url: string
+  screenshotDataUrl?: string
+}

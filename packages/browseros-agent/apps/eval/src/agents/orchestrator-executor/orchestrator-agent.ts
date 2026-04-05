@@ -9,7 +9,12 @@ import { createLanguageModel } from '@browseros/server/agent/tool-loop/provider-
 import type { ResolvedAgentConfig } from '@browseros/server/agent/types'
 import { stepCountIs, ToolLoopAgent, tool } from 'ai'
 import { z } from 'zod'
-import type { ExecutorFactory, ExecutorResult } from './types'
+import type {
+  ExecutorFactory,
+  ExecutorResult,
+  OrchestratorBootstrap,
+  OrchestratorRecentDelegation,
+} from './types'
 import { LIMITS, ORCHESTRATOR_DEFAULTS } from './types'
 
 function sanitizeInstruction(instruction: string): string {
@@ -112,9 +117,8 @@ Each executor result includes:
 - Observation: what the executor saw and did
 - URL: current page URL
 - Actions performed: number of browser actions taken
-- Total executor steps used so far
-- Executor steps remaining in the episode budget
 - Screenshot: when available, the tool output includes a data URL of the current page
+- Recent delegations: the last few delegated subgoals and why they ended
 
 Pay close attention to the status field. A blocked result means the executor got stuck. A done result with weak evidence should not be trusted as real completion.
 
@@ -134,10 +138,36 @@ export interface OrchestratorAgentResult {
 }
 
 interface AgentRunner {
-  generate(params: { prompt: string; abortSignal?: AbortSignal }): Promise<{
+  generate(params: { prompt: unknown; abortSignal?: AbortSignal }): Promise<{
     text: string
     toolCalls?: { toolCallId: string; toolName: string }[]
   }>
+}
+
+function extractExecutorReason(observation: string): string {
+  for (const line of observation.split('\n')) {
+    if (line.startsWith('Reason:')) {
+      return line.slice('Reason:'.length).trim()
+    }
+  }
+  return observation.trim().split('\n')[0]?.trim() || 'No reason recorded.'
+}
+
+function formatRecentDelegations(
+  recentDelegations: OrchestratorRecentDelegation[],
+): string {
+  if (recentDelegations.length === 0) return 'None.'
+
+  return recentDelegations
+    .slice(-3)
+    .map(
+      (item, idx) =>
+        `${idx + 1}. Instruction: ${item.instruction}\n` +
+        `   Status: ${item.status}\n` +
+        `   Actions: ${item.actionsPerformed}\n` +
+        `   Outcome summary: ${item.outcomeSummary}`,
+    )
+    .join('\n')
 }
 
 export class OrchestratorAgent {
@@ -147,6 +177,7 @@ export class OrchestratorAgent {
       delegationCount: number
       totalExecutorSteps: number
       lastObservation: string
+      recentDelegations: OrchestratorRecentDelegation[]
     },
     private maxTurns: number,
   ) {}
@@ -160,6 +191,7 @@ export class OrchestratorAgent {
       delegationCount: 0,
       totalExecutorSteps: 0,
       lastObservation: '',
+      recentDelegations: [],
     }
     const maxTurns = resolvedConfig.maxTurns ?? ORCHESTRATOR_DEFAULTS.maxTurns
 
@@ -182,21 +214,38 @@ export class OrchestratorAgent {
 
         const invalidReason = validateInstruction(instruction)
         if (invalidReason) {
-          const stepsRemaining = Math.max(
-            0,
-            LIMITS.maxTotalSteps - state.totalExecutorSteps,
-          )
+          const reason = `Invalid instruction rejected by runtime validator: ${invalidReason}`
           const observation = `Executor Result:
 - Status: blocked
 - Actions: 0
 - URL: unknown
-- Total executor steps used so far: ${state.totalExecutorSteps}
-- Executor steps remaining: ${stepsRemaining}
+- Recent delegations:
+${formatRecentDelegations(state.recentDelegations)}
 
 Observation:
-Delegation was rejected before execution: ${invalidReason}. Choose a different in-page strategy.`
+Summary: Delegation was blocked before execution.
+Reason: ${reason}
+URL: unknown
+
+Recent actions:
+No actions were executed.
+
+Total model actions: 0`
+          state.recentDelegations.push({
+            instruction,
+            status: 'blocked',
+            actionsPerformed: 0,
+            outcomeSummary: reason,
+          })
+          state.recentDelegations = state.recentDelegations.slice(-3)
           state.lastObservation = observation
-          return observation
+          return {
+            status: 'blocked',
+            actions: 0,
+            url: 'unknown',
+            observation,
+            screenshotDataUrl: undefined,
+          }
         }
 
         const delegationController = new AbortController()
@@ -231,27 +280,31 @@ Delegation was rejected before execution: ${invalidReason}. Choose a different i
         state.totalExecutorSteps += result.actionsPerformed
 
         const statusNote = result.status === 'timeout' ? ' (TIMED OUT)' : ''
-        const stepsRemaining = Math.max(
-          0,
-          LIMITS.maxTotalSteps - state.totalExecutorSteps,
-        )
+        const reason = result.reason ?? extractExecutorReason(result.observation)
+        state.recentDelegations.push({
+          instruction,
+          status: result.status,
+          actionsPerformed: result.actionsPerformed,
+          outcomeSummary: reason,
+        })
+        state.recentDelegations = state.recentDelegations.slice(-3)
         const observation = `Executor Result:
 - Status: ${result.status}${statusNote}
 - Actions: ${result.actionsPerformed}
 - URL: ${result.url || 'unknown'}
-- Total executor steps used so far: ${state.totalExecutorSteps}
-- Executor steps remaining: ${stepsRemaining}
+- Recent delegations:
+${formatRecentDelegations(state.recentDelegations)}
 
 Observation:
 ${result.observation}`
         state.lastObservation = observation
-        if (result.screenshotDataUrl) {
-          return {
-            observation,
-            screenshotDataUrl: result.screenshotDataUrl,
-          }
+        return {
+          status: result.status,
+          actions: result.actionsPerformed,
+          url: result.url || 'unknown',
+          observation,
+          screenshotDataUrl: result.screenshotDataUrl,
         }
-        return observation
       },
     })
 
@@ -266,16 +319,56 @@ ${result.observation}`
   }
 
   async run(
-    taskQuery: string,
+    taskQueryOrBootstrap: string | OrchestratorBootstrap,
     signal?: AbortSignal,
   ): Promise<OrchestratorAgentResult> {
     let answer: string | null = null
     let success = false
     let reason: string | null = null
 
+    const bootstrap =
+      typeof taskQueryOrBootstrap === 'string'
+        ? undefined
+        : taskQueryOrBootstrap
+    const taskQuery =
+      typeof taskQueryOrBootstrap === 'string'
+        ? taskQueryOrBootstrap
+        : taskQueryOrBootstrap.taskQuery
+
+    const promptText = bootstrap
+      ? [
+          'Overall task:',
+          taskQuery,
+          '',
+          'Recent delegations (up to 3, oldest to newest):',
+          formatRecentDelegations(this.state.recentDelegations),
+          '',
+          'Full executor result for the most recent delegation:',
+          'Executor Result:',
+          '- Status: ready',
+          '- Actions: 0',
+          `- URL: ${bootstrap.url || 'unknown'}`,
+          '- Recent delegations:',
+          formatRecentDelegations(this.state.recentDelegations),
+          '',
+          'Observation:',
+          bootstrap.observation,
+          '',
+          'Use only the overall task, the recent delegations above, and the most recent executor result when deciding the next delegation.',
+        ].join('\n')
+      : taskQuery
+
+    const prompt =
+      bootstrap?.screenshotDataUrl != null
+        ? [
+            { type: 'text', text: promptText },
+            { type: 'image', image: bootstrap.screenshotDataUrl },
+          ]
+        : promptText
+
     try {
       const result = await this.agent.generate({
-        prompt: taskQuery,
+        prompt,
         abortSignal: signal,
       })
 

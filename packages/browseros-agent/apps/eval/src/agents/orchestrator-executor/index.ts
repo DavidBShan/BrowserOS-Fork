@@ -28,7 +28,11 @@ import { withEvalTimeout } from '../../utils/with-eval-timeout'
 import type { AgentContext, AgentEvaluator, AgentResult } from '../types'
 import { Executor, type ExecutorCallbacks } from './executor'
 import { OrchestratorAgent } from './orchestrator-agent'
-import type { ExecutorFactory, ExecutorResult } from './types'
+import type {
+  ExecutorFactory,
+  ExecutorResult,
+  OrchestratorBootstrap,
+} from './types'
 
 function extractCdpPort(config: EvalConfig): number {
   const serverUrl = config.browseros.server_url
@@ -43,6 +47,116 @@ interface ResolvedConfigs {
   orchestratorConfig: ResolvedAgentConfig & { maxTurns?: number }
   executorConfig: ResolvedAgentConfig
   isCladoAction: boolean
+}
+
+type PageSnapshot = {
+  url: string
+  title: string
+  bodyText: string
+  scrollX: number
+  scrollY: number
+  popupCount: number
+  expandedCount: number
+  active: {
+    tag: string
+    id: string
+    name: string
+    placeholder: string
+    value: string
+  } | null
+}
+
+async function captureInitialPageSnapshot(
+  browser: Browser,
+  pageId: number,
+): Promise<PageSnapshot | null> {
+  const result = await browser.evaluate(
+    pageId,
+    `(() => {
+      const isVisible = (el) => {
+        if (!el) return false
+        const style = window.getComputedStyle(el)
+        if (
+          style.display === 'none' ||
+          style.visibility === 'hidden' ||
+          Number(style.opacity || '1') === 0
+        ) {
+          return false
+        }
+        const rect = el.getBoundingClientRect()
+        return rect.width > 0 && rect.height > 0
+      }
+      const active = document.activeElement
+      const activeSummary = active
+        ? {
+            tag: String(active.tagName || '').toLowerCase(),
+            id: String(active.getAttribute?.('id') || ''),
+            name: String(active.getAttribute?.('name') || ''),
+            placeholder: String(active.getAttribute?.('placeholder') || ''),
+            value: String(
+              ('value' in active ? active.value : active.innerText) || '',
+            ).slice(0, 200),
+          }
+        : null
+      return {
+        url: String(location.href || ''),
+        title: String(document.title || ''),
+        bodyText: String(document.body?.innerText || '').slice(0, 800),
+        scrollX: Number(window.scrollX || 0),
+        scrollY: Number(window.scrollY || 0),
+        popupCount: Array.from(
+          document.querySelectorAll("dialog, [role='dialog'], [role='listbox'], [role='menu']")
+        ).filter(isVisible).length,
+        expandedCount: Array.from(
+          document.querySelectorAll("[aria-expanded='true'], details[open], dialog[open]")
+        ).filter(isVisible).length,
+        active: activeSummary,
+      }
+    })()`,
+  )
+
+  if (result.error || !result.value || typeof result.value !== 'object') {
+    return null
+  }
+
+  return result.value as PageSnapshot
+}
+
+function formatInitialObservation(snapshot: PageSnapshot | null): string {
+  if (!snapshot) {
+    return [
+      'Summary: Initial page loaded; no executor actions have been taken yet.',
+      'Reason: Initial executor context.',
+      'URL: unknown',
+      '',
+      'Recent actions:',
+      'No actions were executed.',
+      '',
+      'Total model actions: 0',
+    ].join('\n')
+  }
+
+  const activeSummary = snapshot.active
+    ? `${snapshot.active.tag || 'element'} id="${snapshot.active.id}" name="${snapshot.active.name}" placeholder="${snapshot.active.placeholder}" value="${snapshot.active.value}"`
+    : 'none'
+
+  return [
+    'Summary: Initial page loaded; no executor actions have been taken yet.',
+    'Reason: Initial executor context.',
+    `URL: ${snapshot.url || 'unknown'}`,
+    '',
+    'Recent actions:',
+    'No actions were executed.',
+    '',
+    'Total model actions: 0',
+    '',
+    'Initial page state:',
+    `Title: ${snapshot.title || 'unknown'}`,
+    `Active element: ${activeSummary}`,
+    `Open state: popups=${snapshot.popupCount}, expanded=${snapshot.expandedCount}`,
+    `Scroll: x=${snapshot.scrollX}, y=${snapshot.scrollY}`,
+    `Body excerpt: ${snapshot.bodyText || '[empty]'}`,
+  ].join('\n')
 }
 
 function toResolvedAgentConfig(
@@ -285,6 +399,37 @@ export class OrchestratorExecutorEvaluator implements AgentEvaluator {
         return result
       }
 
+      let bootstrap: OrchestratorBootstrap | undefined
+      try {
+        const pages = await browser.listPages()
+        const initialPage = pages[0]
+        if (initialPage) {
+          capture.setActivePageId(initialPage.pageId)
+          const screenshotNum = await capture.screenshot.capture(initialPage.pageId)
+          capture.emitEvent(task.query_id, {
+            type: 'screenshot-captured',
+            screenshot: screenshotNum,
+          })
+          const screenshotBase64 = await capture.screenshot.captureBase64(
+            initialPage.pageId,
+          )
+          const snapshot = await captureInitialPageSnapshot(
+            browser,
+            initialPage.pageId,
+          )
+          bootstrap = {
+            taskQuery: task.query,
+            observation: formatInitialObservation(snapshot),
+            url: snapshot?.url ?? initialPage.url ?? '',
+            screenshotDataUrl: screenshotBase64
+              ? `data:image/png;base64,${screenshotBase64}`
+              : undefined,
+          }
+        }
+      } catch {
+        // Best-effort bootstrap only.
+      }
+
       // Create orchestrator with factory (synchronous — no async init needed)
       const agent = OrchestratorAgent.create(orchestratorConfig, {
         executorFactory,
@@ -296,7 +441,7 @@ export class OrchestratorExecutorEvaluator implements AgentEvaluator {
         timeoutMs,
         capture,
         async (signal) => {
-          const runResult = await agent.run(task.query, signal)
+          const runResult = await agent.run(bootstrap ?? task.query, signal)
           finalAnswer = runResult.answer
 
           if (!runResult.success) {
