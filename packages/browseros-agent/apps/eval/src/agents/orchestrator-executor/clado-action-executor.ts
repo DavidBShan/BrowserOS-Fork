@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'node:crypto'
+import { randomUUID } from 'node:crypto'
 import {
   CLADO_REQUEST_TIMEOUT_MS,
   DOM_STATE_HASH_MAX_CHARS,
@@ -8,6 +8,12 @@ import {
 import { McpClient, type McpToolResult } from '../../utils/mcp-client'
 import { sleep } from '../../utils/sleep'
 import type { ExecutorCallbacks } from './executor'
+import {
+  type PageProgressSnapshot,
+  PAGE_PROGRESS_EVAL_FUNCTION,
+  normalizePageProgressSnapshot,
+  pageProgressSignals,
+} from './page-progress'
 import type { ExecutorConfig, ExecutorResult } from './types'
 
 const CLADO_ACTION_PROVIDER = 'clado-action'
@@ -243,7 +249,7 @@ export class CladoActionExecutor {
       const executionNotes: string[] = []
       for (const predictedAction of predictedActions) {
         const actionSig = this.getActionSignature(predictedAction)
-        const stateBefore = await this.capturePageStateSignature(signal)
+        const stateBefore = await this.capturePageProgressSnapshot(signal)
         try {
           reason = await this.executeAction(predictedAction, signal)
           executionNotes.push(reason)
@@ -278,8 +284,10 @@ export class CladoActionExecutor {
           break
         }
 
-        const stateAfter = await this.capturePageStateSignature(signal)
-        if (stateBefore && stateAfter && stateBefore === stateAfter) {
+        const stateAfter = await this.capturePageProgressSnapshot(signal)
+        const progressSignals = pageProgressSignals(stateBefore, stateAfter)
+
+        if (progressSignals.length === 0) {
           if (actionSig === lastNoProgressActionSig) {
             repeatedNoProgressActionStreak++
           } else {
@@ -289,7 +297,7 @@ export class CladoActionExecutor {
           if (repeatedNoProgressActionStreak >= NO_PROGRESS_MAX_STREAK) {
             status = 'blocked'
             reason =
-              'No progress after repeated identical executor actions with no DOM change. ' +
+              'No progress after repeated identical executor actions with no meaningful page-state change. ' +
               `Last action: ${actionSig}`
             requestedStop = true
             break
@@ -632,70 +640,26 @@ export class CladoActionExecutor {
     }
   }
 
-  private hashText(text: string): string {
-    return createHash('sha256').update(text).digest('hex')
-  }
-
-  private async capturePageStateSignature(
+  private async capturePageProgressSnapshot(
     signal?: AbortSignal,
-  ): Promise<string> {
+  ): Promise<PageProgressSnapshot | null> {
     try {
       const result = await this.runTool(
         'evaluate_script',
         {
-          function: `() => {
-            const bodyText = String(document.body?.innerText || "").slice(0, ${DOM_STATE_HASH_MAX_CHARS});
-            const controls = Array.from(
-              document.querySelectorAll("input, textarea, select, [contenteditable='true']")
-            )
-              .slice(0, 40)
-              .map((el) => {
-                const tag = (el.tagName || "").toLowerCase();
-                const type = String(el.getAttribute("type") || "").toLowerCase();
-                let value = "";
-                if (tag === "select") {
-                  value = String(el.value || "");
-                } else if ("value" in el) {
-                  value = String(el.value || "");
-                } else {
-                  value = String(el.innerText || "");
-                }
-                return {
-                  tag,
-                  type,
-                  name: String(el.getAttribute("name") || ""),
-                  id: String(el.getAttribute("id") || ""),
-                  placeholder: String(el.getAttribute("placeholder") || ""),
-                  checked: !!el.checked,
-                  disabled: !!el.disabled,
-                  value: value.slice(0, 200),
-                };
-              });
-            const active = document.activeElement;
-            const activeSummary = active
-              ? {
-                tag: String(active.tagName || "").toLowerCase(),
-                id: String(active.getAttribute?.("id") || ""),
-                name: String(active.getAttribute?.("name") || ""),
-                placeholder: String(active.getAttribute?.("placeholder") || ""),
-                value: String(("value" in active ? active.value : active.innerText) || "").slice(0, 200),
-              }
-              : null;
-            return JSON.stringify({
-              url: String(location.href || ""),
-              title: String(document.title || ""),
-              bodyText,
-              controls,
-              active: activeSummary,
-            });
-          }`,
+          function: PAGE_PROGRESS_EVAL_FUNCTION.replace(
+            '__MAX_CHARS__',
+            String(DOM_STATE_HASH_MAX_CHARS),
+          ),
         },
         signal,
       )
       const payload = result.text.trim()
-      return payload ? this.hashText(payload) : ''
+      if (!payload) return null
+      const raw = JSON.parse(payload) as Record<string, unknown>
+      return normalizePageProgressSnapshot(raw)
     } catch {
-      return ''
+      return null
     }
   }
 
@@ -1021,7 +985,7 @@ export class CladoActionExecutor {
             .join('\n\n')
 
     return [
-      `Status: ${status}`,
+      `Summary: ${this.observationSummary(status, reason)}`,
       `Reason: ${reason}`,
       `URL: ${url || 'unknown'}`,
       '',
@@ -1034,5 +998,20 @@ export class CladoActionExecutor {
     ]
       .filter(Boolean)
       .join('\n')
+  }
+
+  private observationSummary(
+    status: ExecutorResult['status'],
+    reason: string,
+  ): string {
+    if (status === 'done') {
+      return reason.includes('end()')
+        ? 'Delegation ended after the executor chose to stop.'
+        : 'Delegation completed.'
+    }
+    if (status === 'blocked') {
+      return 'Delegation ended without a verified completion signal.'
+    }
+    return 'Delegation ended before completion could be verified.'
   }
 }

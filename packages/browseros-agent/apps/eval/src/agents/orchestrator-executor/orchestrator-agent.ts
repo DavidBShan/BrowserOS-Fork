@@ -280,7 +280,7 @@ Total model actions: 0`
         state.totalExecutorSteps += result.actionsPerformed
 
         const statusNote = result.status === 'timeout' ? ' (TIMED OUT)' : ''
-        const reason = result.reason ?? extractExecutorReason(result.observation)
+        const reason = extractExecutorReason(result.observation)
         state.recentDelegations.push({
           instruction,
           status: result.status,
