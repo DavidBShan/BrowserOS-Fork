@@ -114,6 +114,7 @@ Each executor result includes:
 - Actions performed: number of browser actions taken
 - Total executor steps used so far
 - Executor steps remaining in the episode budget
+- Screenshot: when available, the tool output includes a data URL of the current page
 
 Pay close attention to the status field. A blocked result means the executor got stuck. A done result with weak evidence should not be trusted as real completion.
 
@@ -244,6 +245,12 @@ Delegation was rejected before execution: ${invalidReason}. Choose a different i
 Observation:
 ${result.observation}`
         state.lastObservation = observation
+        if (result.screenshotDataUrl) {
+          return {
+            observation,
+            screenshotDataUrl: result.screenshotDataUrl,
+          }
+        }
         return observation
       },
     })

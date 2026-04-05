@@ -5,7 +5,8 @@
       "provider": "openai-compatible",
       "model": "accounts/fireworks/models/kimi-k2p5",
       "apiKey": "FIREWORKS_API_KEY",
-      "baseUrl": "https://api.fireworks.ai/inference/v1"
+      "baseUrl": "https://api.fireworks.ai/inference/v1",
+      "maxTurns": 5
     },
     "executor": {
       "provider": "clado-action",

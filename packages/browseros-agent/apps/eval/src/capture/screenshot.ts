@@ -62,6 +62,22 @@ export class ScreenshotCapture {
     }
   }
 
+  /**
+   * Capture a screenshot and return base64 PNG data without persisting to disk.
+   */
+  async captureBase64(pageId: number): Promise<string | null> {
+    try {
+      if (this.browser) {
+        return await this.captureDirect(pageId)
+      }
+      return await this.captureMcp(pageId)
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error)
+      console.warn(`Screenshot capture skipped: ${errorMsg}`)
+      return null
+    }
+  }
+
   private async captureDirect(pageId: number): Promise<string | null> {
     if (!this.browser) return null
     try {

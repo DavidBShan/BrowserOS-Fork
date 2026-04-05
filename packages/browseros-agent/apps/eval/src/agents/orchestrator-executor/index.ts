@@ -258,6 +258,16 @@ export class OrchestratorExecutorEvaluator implements AgentEvaluator {
           await executor.close().catch(() => {})
         }
 
+        const screenshotBase64 = await capture.screenshot.captureBase64(
+          capture.getActivePageId(),
+        )
+        if (screenshotBase64) {
+          result = {
+            ...result,
+            screenshotDataUrl: `data:image/png;base64,${screenshotBase64}`,
+          }
+        }
+
         // Log delegation result
         const delegateOutputEvent: UIMessageStreamEvent = {
           type: 'tool-output-available',

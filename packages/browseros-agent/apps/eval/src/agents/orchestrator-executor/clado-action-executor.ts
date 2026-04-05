@@ -1,7 +1,9 @@
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import {
   CLADO_REQUEST_TIMEOUT_MS,
+  DOM_STATE_HASH_MAX_CHARS,
   MAX_ACTIONS_PER_DELEGATION,
+  NO_PROGRESS_MAX_STREAK,
 } from '../../constants'
 import { McpClient, type McpToolResult } from '../../utils/mcp-client'
 import { sleep } from '../../utils/sleep'
@@ -137,6 +139,8 @@ export class CladoActionExecutor {
     const actionHistory: CladoAction[] = []
     let predictionCalls = 0
     const thinkingTrace: string[] = []
+    let repeatedNoProgressActionStreak = 0
+    let lastNoProgressActionSig: string | null = null
 
     let status: ExecutorResult['status'] = 'done'
     let reason = 'Goal executed.'
@@ -238,6 +242,8 @@ export class CladoActionExecutor {
       let requestedStop = false
       const executionNotes: string[] = []
       for (const predictedAction of predictedActions) {
+        const actionSig = this.getActionSignature(predictedAction)
+        const stateBefore = await this.capturePageStateSignature(signal)
         try {
           reason = await this.executeAction(predictedAction, signal)
           executionNotes.push(reason)
@@ -270,6 +276,27 @@ export class CladoActionExecutor {
           reason = `Action execution failed: ${message}`
           requestedStop = true
           break
+        }
+
+        const stateAfter = await this.capturePageStateSignature(signal)
+        if (stateBefore && stateAfter && stateBefore === stateAfter) {
+          if (actionSig === lastNoProgressActionSig) {
+            repeatedNoProgressActionStreak++
+          } else {
+            lastNoProgressActionSig = actionSig
+            repeatedNoProgressActionStreak = 1
+          }
+          if (repeatedNoProgressActionStreak >= NO_PROGRESS_MAX_STREAK) {
+            status = 'blocked'
+            reason =
+              'No progress after repeated identical executor actions with no DOM change. ' +
+              `Last action: ${actionSig}`
+            requestedStop = true
+            break
+          }
+        } else {
+          repeatedNoProgressActionStreak = 0
+          lastNoProgressActionSig = null
         }
 
         actionHistory.push(predictedAction)
@@ -602,6 +629,73 @@ export class CladoActionExecutor {
       default: {
         throw new Error(`Unsupported Clado action: ${action.action}`)
       }
+    }
+  }
+
+  private hashText(text: string): string {
+    return createHash('sha256').update(text).digest('hex')
+  }
+
+  private async capturePageStateSignature(
+    signal?: AbortSignal,
+  ): Promise<string> {
+    try {
+      const result = await this.runTool(
+        'evaluate_script',
+        {
+          function: `() => {
+            const bodyText = String(document.body?.innerText || "").slice(0, ${DOM_STATE_HASH_MAX_CHARS});
+            const controls = Array.from(
+              document.querySelectorAll("input, textarea, select, [contenteditable='true']")
+            )
+              .slice(0, 40)
+              .map((el) => {
+                const tag = (el.tagName || "").toLowerCase();
+                const type = String(el.getAttribute("type") || "").toLowerCase();
+                let value = "";
+                if (tag === "select") {
+                  value = String(el.value || "");
+                } else if ("value" in el) {
+                  value = String(el.value || "");
+                } else {
+                  value = String(el.innerText || "");
+                }
+                return {
+                  tag,
+                  type,
+                  name: String(el.getAttribute("name") || ""),
+                  id: String(el.getAttribute("id") || ""),
+                  placeholder: String(el.getAttribute("placeholder") || ""),
+                  checked: !!el.checked,
+                  disabled: !!el.disabled,
+                  value: value.slice(0, 200),
+                };
+              });
+            const active = document.activeElement;
+            const activeSummary = active
+              ? {
+                tag: String(active.tagName || "").toLowerCase(),
+                id: String(active.getAttribute?.("id") || ""),
+                name: String(active.getAttribute?.("name") || ""),
+                placeholder: String(active.getAttribute?.("placeholder") || ""),
+                value: String(("value" in active ? active.value : active.innerText) || "").slice(0, 200),
+              }
+              : null;
+            return JSON.stringify({
+              url: String(location.href || ""),
+              title: String(document.title || ""),
+              bodyText,
+              controls,
+              active: activeSummary,
+            });
+          }`,
+        },
+        signal,
+      )
+      const payload = result.text.trim()
+      return payload ? this.hashText(payload) : ''
+    } catch {
+      return ''
     }
   }
 
