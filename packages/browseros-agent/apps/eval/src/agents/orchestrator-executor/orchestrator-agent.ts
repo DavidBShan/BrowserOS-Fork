@@ -38,13 +38,6 @@ function validateInstruction(instruction: string): string | null {
       'browser-level navigation controls are forbidden',
     ],
     [
-      /\b(https?:\/\/|www\.)/.test(text) ||
-        /(?<!@)\b[a-z0-9.-]+\.(com|org|net|io|ai|co|gov|edu|app|dev|info)\b/.test(
-          text,
-        ),
-      'URL typing/crafting instructions are forbidden',
-    ],
-    [
       /\b(error message|javascript error|stack trace|exception text|error text)\b/.test(
         text,
       ) && text.includes('click'),

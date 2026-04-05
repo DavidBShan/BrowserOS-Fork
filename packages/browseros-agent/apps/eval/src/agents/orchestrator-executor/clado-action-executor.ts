@@ -34,6 +34,7 @@ interface CladoActionResponse {
   action?: string
   x?: number
   y?: number
+  url?: string
   text?: string
   key?: string
   direction?: string
@@ -56,6 +57,7 @@ interface CladoAction {
   action: string
   x?: number
   y?: number
+  url?: string
   text?: string
   key?: string
   direction?: string
@@ -430,6 +432,7 @@ export class CladoActionExecutor {
       action: payload.action,
       x: typeof payload.x === 'number' ? payload.x : undefined,
       y: typeof payload.y === 'number' ? payload.y : undefined,
+      url: typeof payload.url === 'string' ? payload.url : undefined,
       text: typeof payload.text === 'string' ? payload.text : undefined,
       key: typeof payload.key === 'string' ? payload.key : undefined,
       direction:
@@ -466,6 +469,21 @@ export class CladoActionExecutor {
     signal?: AbortSignal,
   ): Promise<string> {
     switch (action.action) {
+      case 'navigate': {
+        const url = (action.url ?? '').trim()
+        if (!url) {
+          throw new Error(`${action.action} action missing url field`)
+        }
+        await this.runTool(
+          'navigate_page',
+          { action: 'url', url },
+          signal,
+        )
+        this.currentUrl = url
+        this.lastPoint = null
+        return `Navigated to ${url}.`
+      }
+
       case 'click':
       case 'double_click': {
         const point = await this.resolvePoint(action.x, action.y, signal)
@@ -793,6 +811,7 @@ export class CladoActionExecutor {
       action: prediction.action,
       x: prediction.x,
       y: prediction.y,
+      url: prediction.url,
       text: prediction.text,
       key: prediction.key,
       direction: prediction.direction,
@@ -830,6 +849,8 @@ export class CladoActionExecutor {
       case 'right_click':
       case 'hover':
         return `${action.action}:${action.x ?? 'x'}:${action.y ?? 'y'}`
+      case 'navigate':
+        return `${action.action}:${action.url ?? 'url'}`
       case 'type':
         return `${action.action}:${(action.text ?? '').slice(0, 16)}`
       case 'press_key':
@@ -852,6 +873,8 @@ export class CladoActionExecutor {
 
     const parts = actions.map((action) => {
       switch (action.action) {
+        case 'navigate':
+          return `navigate('${action.url ?? ''}')`
         case 'click':
         case 'double_click':
         case 'right_click':
