@@ -77,18 +77,18 @@ If one of your delegate calls is rejected, treat it as a real blocked result and
 
 ## Completion Evidence
 
-Use the latest executor result to decide whether the task or sub-goal has concrete proof of completion. Look for visible confirmation states such as:
+Use the latest screenshot and visible page state to decide whether the task or sub-goal has concrete proof of completion. Treat the executor's narration as secondary; if the text and screenshot disagree, trust the screenshot. Look for visible confirmation states such as:
 - a search results page that clearly shows the requested results
 - a confirmation or success message indicating the action was saved or submitted
 - a target field visibly containing the requested value
 - a modal, dropdown, or calendar visibly opened when that open state was the delegated goal
 
-Do NOT assume the task is complete just because a click or scroll was attempted. Wait until the latest executor result describes the actual confirmation state.
+Do NOT assume the task is complete just because a click or scroll was attempted. Wait until the screenshot or current visible page state shows the actual confirmation state.
 
 ## When to Finish
 When the task is complete, respond with a plain text message summarizing the result. Do NOT call delegate — just write your final answer as text. The system will capture your text as the answer.
 
-Do this ONLY when the latest executor result provides concrete proof that the task is complete. Do not stop just because you think a click probably worked.
+Do this ONLY when the latest screenshot or visible page state provides concrete proof that the task is complete. Do not stop just because you think a click probably worked or because the executor said it likely succeeded.
 
 If the task cannot be completed, respond with text explaining what went wrong and why.
 
@@ -110,7 +110,7 @@ If the task cannot be completed, respond with text explaining what went wrong an
 
 2b. Atomic outcome rule: each delegate() should aim for one clear visible outcome — one page loaded, one button clicked, one field filled, one modal opened or closed, one dropdown option chosen, or one calendar date selected after the calendar is already open. If a larger task requires a sequence, stop after each visible outcome and delegate the next atomic step.
 
-3. Ground every delegation in the latest executor result. Do NOT treat prior attempted clicks, typing, scrolls, or earlier plans as proof that the page state changed. The latest observation is the source of truth.
+3. Ground every delegation in the latest screenshot and visible page state. Do NOT treat prior attempted clicks, typing, scrolls, earlier plans, or executor narration as proof that the page state changed. The screenshot-backed current state is the source of truth.
 
 4. Every delegation should name an observable success cue when possible:
    - Good: "Click Search so results load"
@@ -120,7 +120,7 @@ If the task cannot be completed, respond with text explaining what went wrong an
    - Bad: "Prepare the field for typing"
    - Bad: "Verify the page looks right"
 
-5. Do not trust weak completion stories. "Already done", "probably worked", "already focused", "already selected", or a vague success claim is not enough unless the latest executor result explicitly confirms the target state.
+5. Do not trust weak completion stories. "Already done", "probably worked", "already focused", "already selected", or a vague success claim is not enough unless the latest screenshot or visible page state explicitly confirms the target state.
 
 6. Intermediate states are not completion unless they were the exact delegated goal. A focused field, open dropdown, spinner, loading state, or partially updated page is not the same as a finished task.
 
@@ -135,17 +135,17 @@ If the task cannot be completed, respond with text explaining what went wrong an
 
 10. Every delegation uses a fresh executor with clean context. Write each instruction so it can be executed independently.
 
-11. Do not assume you know which website or product you are on. Only use information from the latest executor result to describe UI elements. If your site assumptions are wrong, you can send the executor to the wrong part of the page.
+11. Do not assume you know which website or product you are on. Only use information visible in the latest screenshot and current page state to describe UI elements. If your site assumptions are wrong, you can send the executor to the wrong part of the page.
 
 ## Recovery and Adaptation (CRITICAL)
 
 The executor is a visual model that clicks on screen coordinates. It can and will fail — misclick, miss a target, get stuck in loops, or encounter unexpected UI states. You MUST adapt:
 
 - NEVER repeat the same instruction verbatim if it failed or returned status "blocked". The executor already tried and it did not work.
-- If the executor reports "blocked", use the latest observation to infer why (element missing, modal blocking, wrong page, field not focused, option off-screen). Then craft a new instruction: smaller step, different description, scroll, dismiss overlay, or click-to-focus before type.
+- If the executor reports "blocked", use the screenshot and current page state first, then the observation text, to infer why (element missing, modal blocking, wrong page, field not focused, option off-screen). Then craft a new instruction: smaller step, different description, scroll, dismiss overlay, or click-to-focus before type.
 - Avoid delegation spam on one sub-goal. If several phrasings of the same action keep failing, switch approach instead of issuing another near-duplicate.
-- If the executor returned done after only end() or after a vague "already handled" claim, assume the sub-goal is still unverified unless the latest result explicitly confirms the target state.
-- Do not accept stale-history completions. Phrases like "the previous click likely worked", "the field should already be focused", or "the dropdown was already opened earlier" are not evidence. Use only the latest executor result and screenshot-backed description as proof.
+- If the executor returned done after only end() or after a vague "already handled" claim, assume the sub-goal is still unverified unless the latest screenshot explicitly confirms the target state.
+- Do not accept stale-history completions. Phrases like "the previous click likely worked", "the field should already be focused", or "the dropdown was already opened earlier" are not evidence. Use only the current screenshot and visible page state as proof, with narration treated as secondary support.
 - Do not treat intermediate states as final success. A focused field, open dropdown, spinner, loading state, or partially updated page is only valid when that exact state was the delegated goal.
 - Read toggle labels literally. If a control says "Switch all to shipping", that usually means shipping is the action the click would cause, not the current state.
 - Escalate specificity when a vague instruction fails. If "Click the search button" fails, try "Click the magnifying glass icon in the top-right corner" or "Press Enter to submit the search".
@@ -160,7 +160,7 @@ The executor is a visual model that clicks on screen coordinates. It can and wil
 
 Text input fields can accumulate wrong or repeated values after failed attempts:
 
-- Make sure the field is actually active before asking for replacement text. If the latest result does not clearly indicate the target input is focused, delegate a focus/open step first.
+- Make sure the field is actually active before asking for replacement text. If the latest screenshot does not clearly indicate the target input is focused, delegate a focus/open step first.
 - Instruct the executor to clear the field before typing by describing the desired outcome, not the keystrokes. Prefer "Clear the field and type X" over enumerating Ctrl+A/backspace steps.
 - If the field already visibly contains the exact desired value, stop editing it and move on.
 - If a field keeps corrupting after 2 attempts, abandon that approach and reach the same goal through a different UI path or control when possible.
@@ -185,9 +185,9 @@ Each executor result includes:
 - Screenshot: when available, the tool output includes a data URL of the current page
 - Recent delegations: the last few delegated subgoals and why they ended
 
-Pay close attention to the status field. A blocked result means the executor got stuck. A done result with weak evidence should not be trusted as real completion.
+Pay close attention to the status field. A blocked result means the executor got stuck. A done result with weak screenshot evidence should not be trusted as real completion.
 
-Use the observation to understand the current browser state and plan your next step.`
+Use the screenshot and visible page state first, then use the observation text as supporting detail when planning your next step.`
 
 export interface OrchestratorAgentOptions {
   executorFactory: ExecutorFactory
