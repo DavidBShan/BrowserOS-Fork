@@ -423,13 +423,7 @@ ${result.observation}`
         ].join('\n')
       : taskQuery
 
-    const prompt =
-      bootstrap?.screenshotDataUrl != null
-        ? [
-            { type: 'text', text: promptText },
-            { type: 'image', image: bootstrap.screenshotDataUrl },
-          ]
-        : promptText
+    const prompt = promptText
 
     try {
       const result = await this.agent.generate({
