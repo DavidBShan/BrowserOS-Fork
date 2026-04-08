@@ -491,6 +491,15 @@ export class CladoActionExecutor {
     if (!payload.action || typeof payload.action !== 'string') {
       return null
     }
+    if (
+      payload.action === 'type' &&
+      (typeof payload.x !== 'number' ||
+        typeof payload.y !== 'number' ||
+        typeof payload.text !== 'string' ||
+        payload.text.length === 0)
+    ) {
+      return null
+    }
     return {
       action: payload.action,
       x: typeof payload.x === 'number' ? payload.x : undefined,
@@ -585,23 +594,19 @@ export class CladoActionExecutor {
       case 'type': {
         const text = action.text ?? ''
         if (!text) throw new Error('type action missing text field')
-
-        if (typeof action.x === 'number' && typeof action.y === 'number') {
-          this.lastPoint = await this.resolvePoint(action.x, action.y, signal)
-        }
-
-        if (this.lastPoint) {
-          await this.runTool(
-            'type_at',
-            { x: this.lastPoint.x, y: this.lastPoint.y, text, clear: false },
-            signal,
-          )
-        } else {
+        if (typeof action.x !== 'number' || typeof action.y !== 'number') {
           throw new Error(
-            'type action: no coordinates available — cannot determine where to type. ' +
-              'Provide x/y or hover/click the target field first.',
+            'type action must include normalized x/y coordinates (0-1000).',
           )
         }
+
+        const point = await this.resolvePoint(action.x, action.y, signal)
+        this.lastPoint = point
+        await this.runTool(
+          'type_at',
+          { x: point.x, y: point.y, text, clear: false },
+          signal,
+        )
         return `Typed text (${Math.min(text.length, 120)} chars).`
       }
 
@@ -737,12 +742,12 @@ export class CladoActionExecutor {
     signal?: AbortSignal,
   ): Promise<ActionPoint> {
     const viewport = await this.getViewport(signal)
-    const nx = clampNormalized(normalizedX ?? 500)
-    const ny = clampNormalized(normalizedY ?? 500)
+    const xRatio = clampNormalized(normalizedX ?? 500) / 1000
+    const yRatio = clampNormalized(normalizedY ?? 500) / 1000
 
     return {
-      x: Math.round((nx / 1000) * viewport.width),
-      y: Math.round((ny / 1000) * viewport.height),
+      x: Math.round(xRatio * viewport.width),
+      y: Math.round(yRatio * viewport.height),
     }
   }
 
@@ -934,7 +939,7 @@ export class CladoActionExecutor {
       case 'navigate':
         return `${action.action}:${action.url ?? 'url'}`
       case 'type':
-        return `${action.action}:${(action.text ?? '').slice(0, 16)}`
+        return `${action.action}:${action.x ?? 'x'}:${action.y ?? 'y'}:${(action.text ?? '').slice(0, 16)}`
       case 'press_key':
         return `${action.action}:${action.key ?? 'key'}`
       case 'scroll':
@@ -964,6 +969,9 @@ export class CladoActionExecutor {
           return `${action.action}(${Math.round(action.x ?? 500)}, ${Math.round(action.y ?? 500)})`
         case 'type': {
           const text = (action.text ?? '').replace(/'/g, "\\'")
+          if (typeof action.x === 'number' && typeof action.y === 'number') {
+            return `type(${Math.round(action.x)}, ${Math.round(action.y)}, '${text}')`
+          }
           return `type('${text}')`
         }
         case 'press_key':
