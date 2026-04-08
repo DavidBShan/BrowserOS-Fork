@@ -281,14 +281,6 @@ export const KIMI_API_KEY_GUIDE_CLICKED_EVENT =
   'settings.kimi.api_key_guide_clicked'
 
 /** @public */
-export const KIMI_RATE_LIMIT_DOCS_CLICKED_EVENT =
-  'ui.rate_limit.kimi_docs_clicked'
-
-/** @public */
-export const KIMI_RATE_LIMIT_PLATFORM_CLICKED_EVENT =
-  'ui.rate_limit.moonshot_platform_clicked'
-
-/** @public */
 export const SIDEPANEL_VOICE_RECORDING_STARTED_EVENT =
   'sidepanel.voice.recording_started'
 

@@ -61,7 +61,6 @@ import {
   KIMI_API_KEY_GUIDE_CLICKED_EVENT,
   MODEL_SELECTED_EVENT,
 } from '@/lib/constants/analyticsEvents'
-import { useKimiLaunch } from '@/lib/feature-flags/useKimiLaunch'
 import {
   getDefaultBaseUrlForProviders,
   getProviderTemplate,
@@ -226,7 +225,6 @@ export const NewProviderDialog: FC<NewProviderDialogProps> = ({
   const modelListRef = useRef<HTMLDivElement>(null)
   const { supports } = useCapabilities()
   const { baseUrl: agentServerUrl } = useAgentServerUrl()
-  const kimiLaunch = useKimiLaunch()
 
   const filteredProviderTypeOptions = providerTypeOptions.filter((opt) => {
     if (opt.value === 'chatgpt-pro')
@@ -234,8 +232,6 @@ export const NewProviderDialog: FC<NewProviderDialogProps> = ({
     if (opt.value === 'github-copilot')
       return supports(Feature.GITHUB_COPILOT_SUPPORT)
     if (opt.value === 'qwen-code') return supports(Feature.QWEN_CODE_SUPPORT)
-    if (opt.value === 'moonshot')
-      return kimiLaunch || initialValues?.type === 'moonshot'
     if (opt.value === 'openai-compatible') {
       return supports(Feature.OPENAI_COMPATIBLE_SUPPORT)
     }
