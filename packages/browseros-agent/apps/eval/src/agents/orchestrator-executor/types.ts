@@ -16,6 +16,9 @@ export interface ExecutorConfig {
   model: string
   apiKey: string
   baseUrl?: string
+  samplerPath?: string
+  statePath?: string
+  pythonBin?: string
 }
 
 export const ORCHESTRATOR_DEFAULTS = {

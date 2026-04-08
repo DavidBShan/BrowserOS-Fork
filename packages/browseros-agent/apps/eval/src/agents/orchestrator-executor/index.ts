@@ -49,7 +49,11 @@ function extractCdpPort(config: EvalConfig): number {
 
 interface ResolvedConfigs {
   orchestratorConfig: ResolvedAgentConfig & { maxTurns?: number }
-  executorConfig: ResolvedAgentConfig
+  executorConfig: ResolvedAgentConfig & {
+    samplerPath?: string
+    statePath?: string
+    pythonBin?: string
+  }
   isCladoAction: boolean
 }
 
@@ -90,12 +94,23 @@ async function resolveAgentConfig(
       'executor.baseUrl is required in config for clado-action provider',
     )
   }
+  if (
+    config.executor.provider === 'clado-action-tinker' &&
+    !config.executor.samplerPath &&
+    !config.executor.statePath
+  ) {
+    throw new Error(
+      'executor.samplerPath or executor.statePath is required in config for clado-action-tinker provider',
+    )
+  }
 
   const resolvedOrchestrator = await resolveProviderConfig(config.orchestrator)
 
-  const isCladoAction = config.executor.provider === 'clado-action'
+  const isCladoAction =
+    config.executor.provider === 'clado-action' ||
+    config.executor.provider === 'clado-action-tinker'
 
-  let executorConfig: ResolvedAgentConfig
+  let executorConfig: ResolvedConfigs['executorConfig']
   if (isCladoAction) {
     executorConfig = {
       conversationId: crypto.randomUUID(),
@@ -103,6 +118,9 @@ async function resolveAgentConfig(
       model: executorModel,
       apiKey: resolveEnvValue(config.executor.apiKey),
       baseUrl: config.executor.baseUrl,
+      samplerPath: config.executor.samplerPath,
+      statePath: config.executor.statePath,
+      pythonBin: config.executor.pythonBin,
       workingDir: `/tmp/browseros-eval-executor-${crypto.randomUUID()}`,
     }
   } else {
@@ -299,7 +317,9 @@ export class OrchestratorExecutorEvaluator implements AgentEvaluator {
         const initialPage = pages[0]
         if (initialPage) {
           capture.setActivePageId(initialPage.pageId)
-          const screenshotNum = await capture.screenshot.capture(initialPage.pageId)
+          const screenshotNum = await capture.screenshot.capture(
+            initialPage.pageId,
+          )
           capture.emitEvent(task.query_id, {
             type: 'screenshot-captured',
             screenshot: screenshotNum,

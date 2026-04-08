@@ -15,7 +15,14 @@ export const OrchestratorExecutorConfigSchema = z.object({
     maxTurns: z.number().int().min(1).optional(),
   }),
   executor: LLMConfigSchema.extend({
-    provider: z.union([LLMProviderSchema, z.literal('clado-action')]),
+    provider: z.union([
+      LLMProviderSchema,
+      z.literal('clado-action'),
+      z.literal('clado-action-tinker'),
+    ]),
+    samplerPath: z.string().optional(),
+    statePath: z.string().optional(),
+    pythonBin: z.string().optional(),
   }),
 })
 

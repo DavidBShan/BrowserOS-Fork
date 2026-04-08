@@ -60,11 +60,17 @@ export interface ExecutorCallbacks {
   }) => Promise<void>
 }
 
+type CladoResolvedAgentConfig = ResolvedAgentConfig & {
+  samplerPath?: string
+  statePath?: string
+  pythonBin?: string
+}
+
 export class Executor {
   private cladoExecutor: CladoActionExecutor | null = null
   private stepsUsed = 0
   private currentUrl = ''
-  private configTemplate: ResolvedAgentConfig
+  private configTemplate: CladoResolvedAgentConfig
   private isCladoAction: boolean
   private browser: Browser | null
   private serverUrl: string
@@ -74,7 +80,7 @@ export class Executor {
   private callbacks: ExecutorCallbacks
 
   constructor(
-    configTemplate: ResolvedAgentConfig,
+    configTemplate: CladoResolvedAgentConfig,
     browser: Browser | null,
     serverUrl: string,
     options?: {
@@ -107,6 +113,9 @@ export class Executor {
             model: this.configTemplate.model,
             apiKey: this.configTemplate.apiKey ?? '',
             baseUrl: this.configTemplate.baseUrl,
+            samplerPath: this.configTemplate.samplerPath,
+            statePath: this.configTemplate.statePath,
+            pythonBin: this.configTemplate.pythonBin,
           },
           this.serverUrl,
           this.windowId,

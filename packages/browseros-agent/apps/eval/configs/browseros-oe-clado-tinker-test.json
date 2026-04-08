@@ -1,0 +1,38 @@
+{
+  "agent": {
+    "type": "orchestrator-executor",
+    "orchestrator": {
+      "provider": "openai-compatible",
+      "model": "accounts/fireworks/models/kimi-k2p5",
+      "apiKey": "FIREWORKS_API_KEY",
+      "baseUrl": "https://api.fireworks.ai/inference/v1",
+      "maxTurns": 15
+    },
+    "executor": {
+      "provider": "clado-action-tinker",
+      "model": "qwen3-vl-30b-a3b-instruct",
+      "apiKey": "",
+      "pythonBin": "/Users/davidshan/Documents/Programming/Linkd/reinforcement-learning/rl/.venv/bin/python",
+      "statePath": "tinker://fb89e3e5-7b6c-51b0-8a8c-6a75be86fac9:train:0/weights/001250"
+    }
+  },
+  "dataset": "../data/webvoyager_e2e_test.jsonl",
+  "num_workers": 5,
+  "restart_server_per_task": true,
+  "browseros": {
+    "server_url": "http://127.0.0.1:9110",
+    "base_cdp_port": 9010,
+    "base_server_port": 9110,
+    "base_extension_port": 9310,
+    "load_extensions": false,
+    "headless": false
+  },
+  "captcha": {
+    "api_key_env": "NOPECHA_API_KEY"
+  },
+  "graders": ["performance_grader"],
+  "grader_api_key_env": "OPENROUTER_API_KEY",
+  "grader_base_url": "https://openrouter.ai/api/v1",
+  "grader_model": "openai/gpt-4.1",
+  "timeout_ms": 1800000
+}
