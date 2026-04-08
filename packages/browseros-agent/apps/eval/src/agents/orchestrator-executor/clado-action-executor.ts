@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import sharp from 'sharp'
 import {
   CLADO_REQUEST_TIMEOUT_MS,
   DOM_STATE_HASH_MAX_CHARS,
@@ -9,14 +10,16 @@ import { McpClient, type McpToolResult } from '../../utils/mcp-client'
 import { sleep } from '../../utils/sleep'
 import type { ExecutorCallbacks } from './executor'
 import {
-  type PageProgressSnapshot,
-  PAGE_PROGRESS_EVAL_FUNCTION,
   normalizePageProgressSnapshot,
+  PAGE_PROGRESS_EVAL_FUNCTION,
+  type PageProgressSnapshot,
   pageProgressSignals,
 } from './page-progress'
 import type { ExecutorConfig, ExecutorResult } from './types'
 
 const CLADO_ACTION_PROVIDER = 'clado-action'
+const CLADO_IMAGE_MAX_BYTES = 2 * 1024 * 1024
+const CLADO_IMAGE_WIDTH_STEPS = [1280, 1024, 896, 768, 640]
 const PAGE_SCOPED_TOOLS = new Set<string>([
   'take_screenshot',
   'evaluate_script',
@@ -94,6 +97,31 @@ function clampNormalized(value: number): number {
 
 function isCladoProvider(provider: string): boolean {
   return provider === CLADO_ACTION_PROVIDER
+}
+
+async function optimizeScreenshotForRequest(
+  base64Image: string,
+): Promise<string> {
+  const original = Buffer.from(base64Image, 'base64')
+  if (original.byteLength <= CLADO_IMAGE_MAX_BYTES) {
+    return base64Image
+  }
+
+  for (const width of CLADO_IMAGE_WIDTH_STEPS) {
+    const resized = await sharp(original)
+      .resize({ width, withoutEnlargement: true })
+      .png({ compressionLevel: 9, palette: true, quality: 80 })
+      .toBuffer()
+    if (resized.byteLength <= CLADO_IMAGE_MAX_BYTES) {
+      return resized.toString('base64')
+    }
+  }
+
+  const smallest = await sharp(original)
+    .resize({ width: 512, withoutEnlargement: true })
+    .png({ compressionLevel: 9, palette: true, quality: 70 })
+    .toBuffer()
+  return smallest.toString('base64')
 }
 
 export class CladoActionExecutor {
@@ -509,11 +537,7 @@ export class CladoActionExecutor {
         if (!url) {
           throw new Error(`${action.action} action missing url field`)
         }
-        await this.runTool(
-          'navigate_page',
-          { action: 'url', url },
-          signal,
-        )
+        await this.runTool('navigate_page', { action: 'url', url }, signal)
         this.currentUrl = url
         this.lastPoint = null
         return `Navigated to ${url}.`
@@ -666,7 +690,7 @@ export class CladoActionExecutor {
   private async captureScreenshotBase64(signal?: AbortSignal): Promise<string> {
     const result = await this.runTool(
       'take_screenshot',
-      { format: 'webp', quality: 80 },
+      { format: 'png' as const },
       signal,
     )
 
@@ -677,7 +701,7 @@ export class CladoActionExecutor {
       throw new Error('Screenshot response did not include base64 image data')
     }
 
-    return image.data
+    return await optimizeScreenshotForRequest(image.data)
   }
 
   private async getViewport(signal?: AbortSignal): Promise<Viewport> {
