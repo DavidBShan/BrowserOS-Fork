@@ -15,6 +15,7 @@ import type {
   OrchestratorBootstrap,
   OrchestratorRecentDelegation,
 } from './types'
+import { compressScreenshotDataUrl } from './screenshot-utils'
 import { LIMITS, ORCHESTRATOR_DEFAULTS } from './types'
 
 function sanitizeInstruction(instruction: string): string {
@@ -189,6 +190,17 @@ Pay close attention to the status field. A blocked result means the executor got
 
 Use the screenshot and visible page state first, then use the observation text as supporting detail when planning your next step.`
 
+const MAX_PROMPT_CHARS = 80_000
+const MAX_OBSERVATION_CHARS = 20_000
+const MAX_SCREENSHOT_DATA_URL_CHARS = 10_000
+
+function truncateText(text: string, maxChars: number): string {
+  if (text.length <= maxChars) return text
+  const head = text.slice(0, 2000)
+  const tail = text.slice(-(maxChars - 2200))
+  return `${head}\n...[truncated]...\n${tail}`
+}
+
 export interface OrchestratorAgentOptions {
   executorFactory: ExecutorFactory
 }
@@ -203,7 +215,7 @@ export interface OrchestratorAgentResult {
 }
 
 interface AgentRunner {
-  generate(params: { prompt: unknown; abortSignal?: AbortSignal }): Promise<{
+  generate(params: { prompt: string; abortSignal?: AbortSignal }): Promise<{
     text: string
     toolCalls?: { toolCallId: string; toolName: string }[]
   }>
@@ -252,7 +264,12 @@ export class OrchestratorAgent {
     options: OrchestratorAgentOptions,
   ): OrchestratorAgent {
     const model = createLanguageModel(resolvedConfig)
-    const state = {
+    const state: {
+      delegationCount: number
+      totalExecutorSteps: number
+      lastObservation: string
+      recentDelegations: OrchestratorRecentDelegation[]
+    } = {
       delegationCount: 0,
       totalExecutorSteps: 0,
       lastObservation: '',
@@ -303,12 +320,16 @@ Total model actions: 0`
             outcomeSummary: reason,
           })
           state.recentDelegations = state.recentDelegations.slice(-3)
-          state.lastObservation = observation
+          const trimmedObservation = truncateText(
+            observation,
+            MAX_OBSERVATION_CHARS,
+          )
+          state.lastObservation = trimmedObservation
           return {
             status: 'blocked',
             actions: 0,
             url: 'unknown',
-            observation,
+            observation: trimmedObservation,
             screenshotDataUrl: undefined,
           }
         }
@@ -362,13 +383,20 @@ ${formatRecentDelegations(state.recentDelegations)}
 
 Observation:
 ${result.observation}`
-        state.lastObservation = observation
+        const trimmedObservation = truncateText(
+          observation,
+          MAX_OBSERVATION_CHARS,
+        )
+        state.lastObservation = trimmedObservation
         return {
           status: result.status,
           actions: result.actionsPerformed,
           url: result.url || 'unknown',
-          observation,
-          screenshotDataUrl: result.screenshotDataUrl,
+          observation: trimmedObservation,
+          screenshotDataUrl: await compressScreenshotDataUrl(
+            result.screenshotDataUrl,
+            MAX_SCREENSHOT_DATA_URL_CHARS,
+          ),
         }
       },
     })
@@ -423,7 +451,7 @@ ${result.observation}`
         ].join('\n')
       : taskQuery
 
-    const prompt = promptText
+    const prompt = truncateText(promptText, MAX_PROMPT_CHARS)
 
     try {
       const result = await this.agent.generate({

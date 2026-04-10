@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto'
-import sharp from 'sharp'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { type Subprocess, spawn } from 'bun'
 import {
   CLADO_REQUEST_TIMEOUT_MS,
   DOM_STATE_HASH_MAX_CHARS,
@@ -15,11 +17,15 @@ import {
   type PageProgressSnapshot,
   pageProgressSignals,
 } from './page-progress'
+import { optimizeScreenshotForRequest } from './screenshot-utils'
 import type { ExecutorConfig, ExecutorResult } from './types'
 
 const CLADO_ACTION_PROVIDER = 'clado-action'
-const CLADO_IMAGE_MAX_BYTES = 2 * 1024 * 1024
-const CLADO_IMAGE_WIDTH_STEPS = [1280, 1024, 896, 768, 640]
+const CLADO_TINKER_PROVIDER = 'clado-action-tinker'
+const TINKER_BRIDGE_SCRIPT = join(
+  dirname(fileURLToPath(import.meta.url)),
+  '../../../scripts/clado_action_tinker_bridge.py',
+)
 const PAGE_SCOPED_TOOLS = new Set<string>([
   'take_screenshot',
   'evaluate_script',
@@ -96,32 +102,9 @@ function clampNormalized(value: number): number {
 }
 
 function isCladoProvider(provider: string): boolean {
-  return provider === CLADO_ACTION_PROVIDER
-}
-
-async function optimizeScreenshotForRequest(
-  base64Image: string,
-): Promise<string> {
-  const original = Buffer.from(base64Image, 'base64')
-  if (original.byteLength <= CLADO_IMAGE_MAX_BYTES) {
-    return base64Image
-  }
-
-  for (const width of CLADO_IMAGE_WIDTH_STEPS) {
-    const resized = await sharp(original)
-      .resize({ width, withoutEnlargement: true })
-      .png({ compressionLevel: 9, palette: true, quality: 80 })
-      .toBuffer()
-    if (resized.byteLength <= CLADO_IMAGE_MAX_BYTES) {
-      return resized.toString('base64')
-    }
-  }
-
-  const smallest = await sharp(original)
-    .resize({ width: 512, withoutEnlargement: true })
-    .png({ compressionLevel: 9, palette: true, quality: 70 })
-    .toBuffer()
-  return smallest.toString('base64')
+  return (
+    provider === CLADO_ACTION_PROVIDER || provider === CLADO_TINKER_PROVIDER
+  )
 }
 
 export class CladoActionExecutor {
@@ -132,6 +115,9 @@ export class CladoActionExecutor {
   private viewport: Viewport | null = null
   private lastPoint: ActionPoint | null = null
   private currentUrl = ''
+  private tinkerBridgeProc: Subprocess | null = null
+  private tinkerBridgeReader: ReadableStreamDefaultReader<string> | null = null
+  private tinkerBridgeBuffer = ''
 
   constructor(
     private readonly config: ExecutorConfig,
@@ -158,6 +144,12 @@ export class CladoActionExecutor {
   }
 
   async close(): Promise<void> {
+    if (this.tinkerBridgeReader) {
+      await this.tinkerBridgeReader.cancel().catch(() => {})
+      this.tinkerBridgeReader = null
+    }
+    this.tinkerBridgeProc?.kill()
+    this.tinkerBridgeProc = null
     await this.mcpClient.close()
   }
 
@@ -409,6 +401,15 @@ export class CladoActionExecutor {
     actionHistory: CladoAction[],
     signal?: AbortSignal,
   ): Promise<CladoActionResponse> {
+    if (this.config.provider === CLADO_TINKER_PROVIDER) {
+      return this.requestTinkerActionPrediction(
+        instruction,
+        imageBase64,
+        actionHistory,
+        signal,
+      )
+    }
+
     if (!this.config.baseUrl) {
       throw new Error('executor.baseUrl must be set for clado-action provider')
     }
@@ -451,6 +452,125 @@ export class CladoActionExecutor {
     } finally {
       clearTimeout(timeoutHandle)
       signal?.removeEventListener('abort', onAbort)
+    }
+  }
+
+  private async requestTinkerActionPrediction(
+    instruction: string,
+    imageBase64: string,
+    actionHistory: CladoAction[],
+    signal?: AbortSignal,
+  ): Promise<CladoActionResponse> {
+    const request = {
+      instruction,
+      image_base64: imageBase64,
+      history: this.formatHistory(actionHistory),
+    }
+
+    await this.ensureTinkerBridge()
+
+    const proc = this.tinkerBridgeProc
+    if (!proc?.stdin || typeof proc.stdin === 'number') {
+      throw new Error('Tinker bridge stdin is not available')
+    }
+
+    const payload = `${JSON.stringify(request)}\n`
+    const bytesWritten = await proc.stdin.write(payload)
+    if (bytesWritten <= 0) {
+      throw new Error('Failed to write request to Tinker bridge')
+    }
+
+    const line = await this.readTinkerBridgeLine(signal)
+    let response: Record<string, unknown>
+    try {
+      response = JSON.parse(line) as Record<string, unknown>
+    } catch (error) {
+      throw new Error(
+        `Tinker bridge returned invalid JSON: ${asErrorMessage(error)}`,
+      )
+    }
+
+    if (!response.ok) {
+      throw new Error(
+        typeof response.error === 'string'
+          ? response.error
+          : 'Tinker bridge request failed',
+      )
+    }
+
+    return response as CladoActionResponse
+  }
+
+  private async ensureTinkerBridge(): Promise<void> {
+    if (this.tinkerBridgeProc && this.tinkerBridgeReader) {
+      return
+    }
+
+    const pythonBin = this.config.pythonBin || 'python3'
+    const cmd = [pythonBin, TINKER_BRIDGE_SCRIPT, '--model', this.config.model]
+    if (this.config.samplerPath) {
+      cmd.push('--sampler-path', this.config.samplerPath)
+    }
+    if (this.config.statePath) {
+      cmd.push('--state-path', this.config.statePath)
+    }
+    if (this.config.baseUrl) {
+      cmd.push('--base-url', this.config.baseUrl)
+    }
+
+    this.tinkerBridgeProc = spawn({
+      cmd,
+      stdin: 'pipe',
+      stdout: 'pipe',
+      stderr: 'pipe',
+    })
+
+    if (
+      !this.tinkerBridgeProc.stdout ||
+      typeof this.tinkerBridgeProc.stdout === 'number'
+    ) {
+      throw new Error('Failed to capture Tinker bridge stdout')
+    }
+
+    this.tinkerBridgeReader = this.tinkerBridgeProc.stdout
+      .pipeThrough(new TextDecoderStream())
+      .getReader()
+    this.tinkerBridgeBuffer = ''
+  }
+
+  private async readTinkerBridgeLine(signal?: AbortSignal): Promise<string> {
+    if (!this.tinkerBridgeReader) {
+      throw new Error('Tinker bridge reader is not available')
+    }
+
+    while (true) {
+      if (signal?.aborted) {
+        throw new Error('aborted')
+      }
+
+      const newlineIndex = this.tinkerBridgeBuffer.indexOf('\n')
+      if (newlineIndex >= 0) {
+        const line = this.tinkerBridgeBuffer.slice(0, newlineIndex).trim()
+        this.tinkerBridgeBuffer = this.tinkerBridgeBuffer.slice(newlineIndex + 1)
+        if (line.length > 0) {
+          return line
+        }
+        continue
+      }
+
+      const { value, done } = await this.tinkerBridgeReader.read()
+      if (done) {
+        this.tinkerBridgeReader = null
+        this.tinkerBridgeProc = null
+        const remainder = this.tinkerBridgeBuffer.trim()
+        this.tinkerBridgeBuffer = ''
+        if (remainder.length > 0) {
+          return remainder
+        }
+        throw new Error('Tinker bridge exited before returning a response')
+      }
+
+      this.tinkerBridgeBuffer += value
     }
   }
 

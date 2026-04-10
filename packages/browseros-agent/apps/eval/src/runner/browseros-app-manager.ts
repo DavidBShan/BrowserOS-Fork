@@ -29,6 +29,7 @@ import { sleep } from '../utils/sleep'
 const MAX_RESTART_ATTEMPTS = 3
 const CDP_WAIT_TIMEOUT_MS = 30_000
 const SERVER_HEALTH_TIMEOUT_MS = 30_000
+const NEEDS_NO_SANDBOX = process.platform === 'linux'
 
 const MONOREPO_ROOT = join(
   dirname(fileURLToPath(import.meta.url)),
@@ -135,6 +136,7 @@ export class BrowserOSAppManager {
       '--use-mock-keychain',
       '--disable-browseros-server',
       '--disable-browseros-extensions',
+      ...(NEEDS_NO_SANDBOX ? ['--no-sandbox'] : []),
       ...(this.headless ? ['--headless=new'] : []),
       '--window-size=1440,900',
       `--remote-debugging-port=${cdp}`,

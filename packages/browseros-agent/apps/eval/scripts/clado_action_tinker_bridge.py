@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import base64
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -21,8 +22,23 @@ from dotenv import load_dotenv
 load_dotenv()
 
 REPO_ROOT = Path(__file__).resolve().parents[5]
-RL_ROOT = Path(__file__).resolve().parents[6] / "rl"
-RL_ACTION_RECIPE_DIR = RL_ROOT / "browseros" / "recipe" / "legacy" / "rl"
+WORKSPACE_ROOT = Path(__file__).resolve().parents[6]
+RL_ACTION_RECIPE_CANDIDATES = [
+    Path(os.environ["CLADO_ACTION_RECIPE_DIR"]).expanduser()
+    for _ in [0]
+    if os.environ.get("CLADO_ACTION_RECIPE_DIR")
+] + [
+    WORKSPACE_ROOT / "clado-cookbook" / "browseros" / "recipe" / "rl",
+    WORKSPACE_ROOT / "rl" / "browseros" / "recipe" / "legacy" / "rl",
+]
+RL_ACTION_RECIPE_DIR = next(
+    (
+        candidate.resolve()
+        for candidate in RL_ACTION_RECIPE_CANDIDATES
+        if (candidate / "action_space.py").exists()
+    ),
+    RL_ACTION_RECIPE_CANDIDATES[-1],
+)
 if str(RL_ACTION_RECIPE_DIR) not in sys.path:
     sys.path.insert(0, str(RL_ACTION_RECIPE_DIR))
 
