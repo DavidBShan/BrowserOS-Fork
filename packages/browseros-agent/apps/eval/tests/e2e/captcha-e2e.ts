@@ -46,7 +46,7 @@ const EVAL_CONFIG = {
     base_cdp_port: 9010,
     base_server_port: 9110,
     base_extension_port: 9310,
-    load_extensions: false,
+    load_extensions: true,
     headless: false,
   },
   captcha: { api_key_env: 'NOPECHA_API_KEY' },

@@ -89,13 +89,20 @@ export class ParallelExecutor {
 
     const loadExtensions = this.config.config.browseros.load_extensions ?? false
 
-    // Patch NopeCHA API key before launching any workers
+    // Patch NopeCHA API key before launching any workers when extensions are enabled.
     const captchaConfig = this.config.config.captcha
-    if (captchaConfig) {
+    if (loadExtensions && captchaConfig) {
       const apiKey = process.env[captchaConfig.api_key_env]
-      if (apiKey) {
-        BrowserOSAppManager.patchNopechaApiKey(apiKey)
+      if (!apiKey) {
+        throw new Error(
+          `${captchaConfig.api_key_env} is required when BrowserOS extensions are enabled`,
+        )
       }
+      BrowserOSAppManager.patchNopechaApiKey(apiKey)
+    } else if (loadExtensions) {
+      console.warn(
+        '[BROWSEROS] Extensions enabled, but no captcha config was provided; NopeCHA key was not patched',
+      )
     }
 
     this.queue = new TaskQueue(tasks)

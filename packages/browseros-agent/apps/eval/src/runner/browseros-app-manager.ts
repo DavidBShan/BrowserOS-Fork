@@ -14,6 +14,7 @@
  */
 
 import {
+  cpSync,
   existsSync,
   mkdtempSync,
   readFileSync,
@@ -39,10 +40,14 @@ const BROWSEROS_BINARY =
   process.env.BROWSEROS_BINARY ||
   '/Applications/BrowserOS.app/Contents/MacOS/BrowserOS'
 
-const CAPTCHA_EXT_DIR = join(
-  dirname(fileURLToPath(import.meta.url)),
-  '../../extensions/nopecha',
-)
+const CAPTCHA_EXT_DIR =
+  process.env.NOPECHA_EXTENSION_DIR ||
+  join(dirname(fileURLToPath(import.meta.url)), '../../extensions/nopecha')
+let patchedCaptchaExtDir: string | null = null
+
+function getCaptchaExtDir(): string {
+  return patchedCaptchaExtDir || CAPTCHA_EXT_DIR
+}
 
 export class BrowserOSAppManager {
   private ports: EvalPorts
@@ -127,12 +132,19 @@ export class BrowserOSAppManager {
       `  [W${this.workerIndex}] Ports: CDP=${cdp} Server=${server} Extension=${extension}${this.headless ? ' (headless)' : ''}`,
     )
     console.log(`  [W${this.workerIndex}] Profile: ${this.tempDir}`)
+    if (!existsSync(BROWSEROS_BINARY)) {
+      throw new Error(`BrowserOS binary not found: ${BROWSEROS_BINARY}`)
+    }
+    console.log(
+      `  [W${this.workerIndex}] BrowserOS binary: ${BROWSEROS_BINARY}`,
+    )
 
     // --- Chrome Launch (matches start.ts startManualBrowser) ---
     const chromeArgs = [
       '--no-first-run',
       '--no-default-browser-check',
       '--use-mock-keychain',
+      '--show-component-extension-options',
       '--no-sandbox',
       '--disable-browseros-server',
       '--disable-browseros-extensions',
@@ -145,10 +157,16 @@ export class BrowserOSAppManager {
     ]
 
     const extensions: string[] = []
-    if (this.loadExtensions && existsSync(CAPTCHA_EXT_DIR)) {
-      extensions.push(CAPTCHA_EXT_DIR)
+    if (this.loadExtensions) {
+      const captchaExtDir = getCaptchaExtDir()
+      const manifestPath = join(captchaExtDir, 'manifest.json')
+      if (!existsSync(manifestPath)) {
+        throw new Error(`NopeCHA extension not found: ${captchaExtDir}`)
+      }
+      extensions.push(captchaExtDir)
     }
     if (extensions.length > 0) {
+      chromeArgs.push(`--disable-extensions-except=${extensions.join(',')}`)
       chromeArgs.push(`--load-extension=${extensions.join(',')}`)
       console.log(
         `  [W${this.workerIndex}] Loading extensions: ${extensions.join(',')}`,
@@ -163,7 +181,7 @@ export class BrowserOSAppManager {
       stderr: 'ignore',
     })
     console.log(
-      `  [W${this.workerIndex}] Chrome started (PID: ${this.chromeProc.pid})`,
+      `  [W${this.workerIndex}] BrowserOS started (PID: ${this.chromeProc.pid})`,
     )
 
     // --- Wait for CDP ---
@@ -311,16 +329,32 @@ export class BrowserOSAppManager {
    * Call once before launching any workers — the extension directory is shared.
    */
   static patchNopechaApiKey(apiKey: string): void {
-    const manifestPath = join(CAPTCHA_EXT_DIR, 'manifest.json')
-    if (!existsSync(manifestPath)) {
-      console.log(
-        '[BROWSEROS] NopeCHA extension not found, skipping API key patch',
-      )
-      return
+    const trimmedApiKey = apiKey.trim()
+    if (!trimmedApiKey) {
+      throw new Error('NopeCHA API key is empty')
     }
+    const sourceManifestPath = join(CAPTCHA_EXT_DIR, 'manifest.json')
+    if (!existsSync(sourceManifestPath)) {
+      throw new Error(`NopeCHA extension not found: ${CAPTCHA_EXT_DIR}`)
+    }
+    if (patchedCaptchaExtDir?.startsWith('/tmp/browseros-nopecha-')) {
+      rmSync(patchedCaptchaExtDir, { recursive: true, force: true })
+    }
+    patchedCaptchaExtDir = mkdtempSync('/tmp/browseros-nopecha-')
+    cpSync(CAPTCHA_EXT_DIR, patchedCaptchaExtDir, { recursive: true })
+    const manifestPath = join(patchedCaptchaExtDir, 'manifest.json')
     const manifest = JSON.parse(readFileSync(manifestPath, 'utf-8'))
-    manifest.nopecha = { ...manifest.nopecha, key: apiKey }
+    manifest.nopecha = {
+      ...manifest.nopecha,
+      key: trimmedApiKey,
+      keys: [trimmedApiKey],
+      enabled: true,
+      recaptcha_auto_solve: true,
+      hcaptcha_auto_solve: true,
+      funcaptcha_auto_solve: true,
+      turnstile_auto_solve: true,
+    }
     writeFileSync(manifestPath, JSON.stringify(manifest, null, 2))
-    console.log('[BROWSEROS] NopeCHA API key patched')
+    console.log(`[BROWSEROS] NopeCHA API key patched: ${manifestPath}`)
   }
 }
