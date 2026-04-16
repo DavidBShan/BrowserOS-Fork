@@ -39,6 +39,10 @@ export const DEFAULT_AXES: AxisDefinition[] = [
   },
 ]
 
+export interface BuildUserPromptOptions {
+  stateOnlyMode?: boolean
+}
+
 export const PERFORMANCE_SYSTEM_PROMPT = `You are a performance evaluator for a browser automation agent. You will score how well the agent executed a web task across multiple axes.
 
 ## Data Files
@@ -101,6 +105,8 @@ When the agent's final answer contains specific data (prices, names, dates, coun
 - Task asks "list the top 3 articles" → grep for the article titles mentioned in the answer
 - Task asks "extract the email address" → grep for the email pattern
 This is the most reliable way to verify whether the agent actually found the data it claims, since screenshots may be blurry, truncated, or missing the relevant section.
+
+For action-only agents, the final answer may be absent or may contain executor status text instead of a user-facing response. In that case, judge task_completion from the final browser state, screenshots, action sequence, and DOM evidence. Do not penalize the agent solely for lacking a textual final answer when the task contract asks it to leave the requested evidence visible on screen.
 
 ## How to View Screenshots
 
@@ -169,6 +175,7 @@ export function buildUserPrompt(
   metrics: PreComputedMetrics,
   axes: AxisDefinition[],
   expectedAnswer?: string | null,
+  options: BuildUserPromptOptions = {},
 ): string {
   const axesBlock = axes
     .map((a) => `- **${a.name}** (weight: ${a.weight}): ${a.description}`)
@@ -180,11 +187,16 @@ export function buildUserPrompt(
     ? `\n## Expected Answer (Ground Truth)\n${expectedAnswer}\n\nWhen scoring task_completion, compare the agent's final answer against this ground truth. Consider semantic equivalence, partial correctness, and completeness. Award partial credit where the agent got some but not all parts right.`
     : ''
 
+  const stateOnlyBlock = options.stateOnlyMode
+    ? `\n## Action-Only Browser-State Evaluation\nThis run used an action-only Clado executor. The model can click, type, scroll, wait, and emit end(), but it has no supported channel for a separate natural-language final answer. Treat the browser state as the output. Score task_completion by verifying whether the requested information or destination is visible or otherwise evidenced in screenshots/messages.jsonl. Ignore executor status text such as max-budget or end-observation as a substantive answer. Still penalize repeated loops, unnecessary actions, CAPTCHA blockage, unsupported claims in reasoning, and failure to reach visible evidence.\n`
+    : ''
+
   return `## Task
 ${taskQuery}
+${stateOnlyBlock}
 
 ## Agent's Final Answer
-${finalAnswer || '[No answer provided]'}
+${options.stateOnlyMode ? '[Action-only run: judge browser state, not this field]' : finalAnswer || '[No answer provided]'}
 ${expectedAnswerBlock}
 ## Pre-Computed Metrics
 ${metricsBlock}

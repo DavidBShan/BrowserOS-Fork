@@ -47,6 +47,7 @@ export class PerformanceGrader implements Grader {
     try {
       // Read termination reason from metadata.json
       let terminationReason = 'unknown'
+      let stateOnlyMode = false
       try {
         const metadataRaw = await readFile(
           join(input.outputDir, 'metadata.json'),
@@ -54,6 +55,7 @@ export class PerformanceGrader implements Grader {
         )
         const metadata = JSON.parse(metadataRaw)
         terminationReason = metadata.termination_reason || 'unknown'
+        stateOnlyMode = metadata.agent_config?.type === 'clado-action'
       } catch {
         // metadata.json may not exist
       }
@@ -75,6 +77,7 @@ export class PerformanceGrader implements Grader {
         metrics,
         this.axes,
         input.expectedAnswer,
+        { stateOnlyMode },
       )
 
       const response = await this.runAgent(
