@@ -16,6 +16,7 @@ const AgentConfigMetaSchema = z
     type: z.enum([
       'single',
       'orchestrator-executor',
+      'clado-action',
       'gemini-computer-use',
       'yutori-navigator',
     ]),

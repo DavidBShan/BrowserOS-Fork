@@ -2,6 +2,8 @@
 export {
   type AgentConfig,
   AgentConfigSchema,
+  type CladoActionConfig,
+  CladoActionConfigSchema,
   type EvalConfig,
   EvalConfigSchema,
   type GeminiComputerUseConfig,

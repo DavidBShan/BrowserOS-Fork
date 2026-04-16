@@ -1,3 +1,4 @@
+import { CladoActionEvaluator } from './clado-action'
 import { GeminiComputerUseEvaluator } from './gemini-computer-use'
 import { OrchestratorExecutorEvaluator } from './orchestrator-executor'
 import { registerAgent } from './registry'
@@ -10,6 +11,7 @@ registerAgent(
   'orchestrator-executor',
   (ctx) => new OrchestratorExecutorEvaluator(ctx),
 )
+registerAgent('clado-action', (ctx) => new CladoActionEvaluator(ctx))
 registerAgent(
   'gemini-computer-use',
   (ctx) => new GeminiComputerUseEvaluator(ctx),

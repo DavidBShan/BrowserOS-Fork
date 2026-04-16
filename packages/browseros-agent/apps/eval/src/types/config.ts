@@ -19,6 +19,14 @@ export const OrchestratorExecutorConfigSchema = z.object({
   }),
 })
 
+export const CladoActionConfigSchema = z.object({
+  type: z.literal('clado-action'),
+  provider: z.literal('clado-action'),
+  model: z.string().min(1),
+  apiKey: z.string().optional().default(''),
+  baseUrl: z.string().url(),
+})
+
 export const GeminiComputerUseConfigSchema = z.object({
   type: z.literal('gemini-computer-use'),
   apiKey: z
@@ -48,6 +56,7 @@ export const YutoriNavigatorConfigSchema = z.object({
 export const AgentConfigSchema = z.discriminatedUnion('type', [
   SingleAgentConfigSchema,
   OrchestratorExecutorConfigSchema,
+  CladoActionConfigSchema,
   GeminiComputerUseConfigSchema,
   YutoriNavigatorConfigSchema,
 ])
@@ -84,6 +93,7 @@ export type SingleAgentConfig = z.infer<typeof SingleAgentConfigSchema>
 export type OrchestratorExecutorConfig = z.infer<
   typeof OrchestratorExecutorConfigSchema
 >
+export type CladoActionConfig = z.infer<typeof CladoActionConfigSchema>
 export type GeminiComputerUseConfig = z.infer<
   typeof GeminiComputerUseConfigSchema
 >
