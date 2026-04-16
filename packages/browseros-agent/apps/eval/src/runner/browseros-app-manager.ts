@@ -28,7 +28,7 @@ import { sleep } from '../utils/sleep'
 
 const MAX_RESTART_ATTEMPTS = 3
 const CDP_WAIT_TIMEOUT_MS = 30_000
-const SERVER_HEALTH_TIMEOUT_MS = 30_000
+const SERVER_HEALTH_TIMEOUT_MS = 120_000
 
 const MONOREPO_ROOT = join(
   dirname(fileURLToPath(import.meta.url)),
@@ -133,6 +133,7 @@ export class BrowserOSAppManager {
       '--no-first-run',
       '--no-default-browser-check',
       '--use-mock-keychain',
+      '--no-sandbox',
       '--disable-browseros-server',
       '--disable-browseros-extensions',
       ...(this.headless ? ['--headless=new'] : []),
@@ -149,6 +150,9 @@ export class BrowserOSAppManager {
     }
     if (extensions.length > 0) {
       chromeArgs.push(`--load-extension=${extensions.join(',')}`)
+      console.log(
+        `  [W${this.workerIndex}] Loading extensions: ${extensions.join(',')}`,
+      )
     }
 
     chromeArgs.push('about:blank')
