@@ -4,7 +4,8 @@
     "provider": "clado-action",
     "model": "qwen3-vl-30b-a3b-instruct",
     "apiKey": "",
-    "baseUrl": "https://clado-ai--clado-browseros-action-001760-actionmodel-generate.modal.run"
+    "baseUrl": "https://clado-ai--clado-browseros-action-001760-actionmodel-generate.modal.run",
+    "temperature": 0.7
   },
   "dataset": "../data/local/webbench-2of4-30-visible.jsonl",
   "output_dir": "../results",

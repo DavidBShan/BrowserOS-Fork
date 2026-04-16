@@ -133,6 +133,7 @@ export class CladoActionEvaluator implements AgentEvaluator {
         model: agentConfig.model,
         apiKey: resolveEnvValue(agentConfig.apiKey) ?? '',
         baseUrl: agentConfig.baseUrl,
+        temperature: agentConfig.temperature,
       },
       config.browseros.server_url,
       undefined,
@@ -178,6 +179,7 @@ export class CladoActionEvaluator implements AgentEvaluator {
         agent_config: {
           type: 'clado-action',
           model: agentConfig.model,
+          temperature: agentConfig.temperature,
         },
         grader_results: {},
       }

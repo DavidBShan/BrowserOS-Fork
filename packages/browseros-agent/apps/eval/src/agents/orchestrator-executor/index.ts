@@ -41,7 +41,7 @@ function extractCdpPort(config: EvalConfig): number {
 
 interface ResolvedConfigs {
   orchestratorConfig: ResolvedAgentConfig & { maxTurns?: number }
-  executorConfig: ResolvedAgentConfig
+  executorConfig: ResolvedAgentConfig & { temperature?: number }
   isCladoAction: boolean
 }
 
@@ -87,7 +87,7 @@ async function resolveAgentConfig(
 
   const isCladoAction = config.executor.provider === 'clado-action'
 
-  let executorConfig: ResolvedAgentConfig
+  let executorConfig: ResolvedAgentConfig & { temperature?: number }
   if (isCladoAction) {
     executorConfig = {
       conversationId: crypto.randomUUID(),
@@ -95,6 +95,7 @@ async function resolveAgentConfig(
       model: executorModel,
       apiKey: resolveEnvValue(config.executor.apiKey),
       baseUrl: config.executor.baseUrl,
+      temperature: config.executor.temperature,
       workingDir: `/tmp/browseros-eval-executor-${crypto.randomUUID()}`,
     }
   } else {

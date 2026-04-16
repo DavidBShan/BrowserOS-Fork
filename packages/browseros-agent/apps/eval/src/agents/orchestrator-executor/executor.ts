@@ -64,7 +64,7 @@ export class Executor {
   private cladoExecutor: CladoActionExecutor | null = null
   private stepsUsed = 0
   private currentUrl = ''
-  private configTemplate: ResolvedAgentConfig
+  private configTemplate: ResolvedAgentConfig & { temperature?: number }
   private isCladoAction: boolean
   private browser: Browser | null
   private serverUrl: string
@@ -74,7 +74,7 @@ export class Executor {
   private callbacks: ExecutorCallbacks
 
   constructor(
-    configTemplate: ResolvedAgentConfig,
+    configTemplate: ResolvedAgentConfig & { temperature?: number },
     browser: Browser | null,
     serverUrl: string,
     options?: {
@@ -107,6 +107,7 @@ export class Executor {
             model: this.configTemplate.model,
             apiKey: this.configTemplate.apiKey ?? '',
             baseUrl: this.configTemplate.baseUrl,
+            temperature: this.configTemplate.temperature,
           },
           this.serverUrl,
           this.windowId,

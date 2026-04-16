@@ -16,6 +16,7 @@ export const OrchestratorExecutorConfigSchema = z.object({
   }),
   executor: LLMConfigSchema.extend({
     provider: z.union([LLMProviderSchema, z.literal('clado-action')]),
+    temperature: z.number().min(0).max(2).optional(),
   }),
 })
 
@@ -25,6 +26,7 @@ export const CladoActionConfigSchema = z.object({
   model: z.string().min(1),
   apiKey: z.string().optional().default(''),
   baseUrl: z.string().url(),
+  temperature: z.number().min(0).max(2).optional(),
 })
 
 export const GeminiComputerUseConfigSchema = z.object({

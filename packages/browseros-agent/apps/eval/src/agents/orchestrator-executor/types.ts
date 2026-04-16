@@ -15,6 +15,7 @@ export interface ExecutorConfig {
   model: string
   apiKey: string
   baseUrl?: string
+  temperature?: number
 }
 
 export const ORCHESTRATOR_DEFAULTS = {

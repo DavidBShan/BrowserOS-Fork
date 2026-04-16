@@ -371,6 +371,9 @@ export class CladoActionExecutor {
           instruction,
           image_base64: imageBase64,
           history: this.formatHistory(actionHistory),
+          ...(typeof this.config.temperature === 'number'
+            ? { temperature: this.config.temperature }
+            : {}),
         }),
         signal: requestController.signal,
       })
