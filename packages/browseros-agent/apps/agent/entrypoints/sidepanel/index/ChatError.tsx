@@ -31,6 +31,7 @@ const PROVIDER_DISPLAY_NAMES: Record<ProviderType, string> = {
   'chatgpt-pro': 'ChatGPT Pro',
   'github-copilot': 'GitHub Copilot',
   'qwen-code': 'Qwen Code',
+  minimax: 'MiniMax',
 }
 
 const UPSTREAM_RATE_LIMIT_PATTERNS: Array<string | RegExp> = [
