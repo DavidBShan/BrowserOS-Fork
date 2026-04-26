@@ -1,4 +1,6 @@
 **/.DS_Store
+**.auctor/**
+.auctor.json
 .gcs_entries
 **/dmg
 **/env
