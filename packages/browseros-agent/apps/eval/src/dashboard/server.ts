@@ -503,7 +503,8 @@ export interface DashboardConfig {
 }
 
 export function startDashboard(config: DashboardConfig) {
-  const port = config.port ?? 9900
+  const envPort = Number.parseInt(process.env.BROWSEROS_EVAL_DASHBOARD_PORT || "", 10)
+  const port = config.port ?? (Number.isFinite(envPort) ? envPort : 9900)
   dashboardConfigMode = config.configMode ?? false
 
   dashboardState.init(

@@ -79,7 +79,11 @@ export function createGrader(
 
     // Multi-axis performance grader (Claude Agent SDK — uses its own Claude default model)
     case 'performance_grader':
-      return new PerformanceGrader()
+      return new PerformanceGrader(
+        options?.apiKey,
+        options?.baseUrl,
+        options?.model,
+      )
 
     default:
       console.warn(`Unknown grader: ${name}`)

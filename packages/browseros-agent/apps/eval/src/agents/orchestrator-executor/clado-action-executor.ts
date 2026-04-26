@@ -413,23 +413,8 @@ export class CladoActionExecutor {
       action: actionFromField ?? primaryFromRaw?.action,
     }
 
-    const normalized: CladoAction[] = []
     const primary = this.normalizeActionPayload(mergedPrimary)
-    if (primary) normalized.push(primary)
-
-    for (const candidate of rawActions.slice(1)) {
-      const parsed = this.normalizeActionPayload(candidate)
-      if (!parsed) continue
-      const prev = normalized[normalized.length - 1]
-      if (
-        !prev ||
-        this.getActionSignature(prev) !== this.getActionSignature(parsed)
-      ) {
-        normalized.push(parsed)
-      }
-    }
-
-    return normalized
+    return primary ? [primary] : []
   }
 
   private normalizeActionPayload(
@@ -838,6 +823,20 @@ export class CladoActionExecutor {
 
     if (!merged) return undefined
     return merged
+  }
+
+  private normalizeHistoryThinking(
+    thinking: string | undefined,
+  ): string | undefined {
+    if (!thinking) return undefined
+
+    const normalized = thinking
+      .replace(/<\/?thinking>/gi, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+
+    if (!normalized) return undefined
+    return normalized
   }
 
   private getActionSignature(action: CladoAction): string {

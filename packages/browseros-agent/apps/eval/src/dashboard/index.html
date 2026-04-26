@@ -1266,6 +1266,7 @@ function appendStreamEntry(event, scroll = true) {
     const output = event.output;
     const actions = output.parsedActions || [];
     const executed = output.executed || [];
+    const thinking = output.prediction?.thinking || '';
 
     const actionItems = actions.map((a, i) => {
       const desc = formatAction(a);
@@ -1278,9 +1279,14 @@ function appendStreamEntry(event, scroll = true) {
       return `<div class="action-item"><span class="${cls}">${icon}</span> ${escapeHtml(desc)}${note}</div>`;
     }).join('');
 
+    const thinkingHtml = thinking
+      ? `<div class="entry-body" style="margin-top:6px; white-space:pre-wrap; word-break:break-word;"><strong>Reasoning</strong>\n${escapeHtml(thinking)}</div>`
+      : '';
+
     html = `<div class="stream-entry actions">
       <div class="entry-label">Actions</div>
       <div class="action-list">${actionItems}</div>
+      ${thinkingHtml}
     </div>`;
   }
 
