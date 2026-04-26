@@ -32,6 +32,8 @@ const PAGE_SCOPED_TOOLS = new Set<string>([
 
 interface CladoActionResponse {
   action?: string
+  final_answer?: string
+  thinking?: string
   x?: number
   y?: number
   text?: string
@@ -54,6 +56,8 @@ interface Viewport {
 
 interface CladoAction {
   action: string
+  final_answer?: string
+  thinking?: string
   x?: number
   y?: number
   text?: string
@@ -177,7 +181,11 @@ export class CladoActionExecutor {
           signal,
         )
         predictionCalls++
-        const thinking = this.extractThinking(prediction.raw_response)
+        const thinking = this.normalizeHistoryThinking(
+          typeof prediction.thinking === "string"
+            ? prediction.thinking
+            : this.extractThinking(prediction.raw_response),
+        )
         if (thinking) {
           const previous = thinkingTrace[thinkingTrace.length - 1]
           if (previous !== thinking) {
@@ -371,6 +379,7 @@ export class CladoActionExecutor {
           instruction,
           image_base64: imageBase64,
           history: this.formatHistory(actionHistory),
+          history_actions: actionHistory,
           ...(typeof this.config.temperature === 'number'
             ? { temperature: this.config.temperature }
             : {}),
@@ -431,6 +440,9 @@ export class CladoActionExecutor {
     }
     return {
       action: payload.action,
+      final_answer:
+        typeof payload.final_answer === "string" ? payload.final_answer : undefined,
+      thinking: typeof payload.thinking === "string" ? payload.thinking : undefined,
       x: typeof payload.x === 'number' ? payload.x : undefined,
       y: typeof payload.y === 'number' ? payload.y : undefined,
       text: typeof payload.text === 'string' ? payload.text : undefined,
@@ -794,6 +806,8 @@ export class CladoActionExecutor {
 
     return {
       action: prediction.action,
+      final_answer: prediction.final_answer,
+      thinking: prediction.thinking,
       x: prediction.x,
       y: prediction.y,
       text: prediction.text,
